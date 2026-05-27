@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+client/node_modules/
+
+# Build output
+client/dist/
+client/.quasar/
+
+# Environment
+.env
+.env.local
+.env.*.local
+client/.env
+client/.env.local
+
+# Firebase
+.firebase/
+firebase-debug.log
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Misc
+*.log
+.cache/

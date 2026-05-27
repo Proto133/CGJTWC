@@ -1,0 +1,37 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============ PUBLIC READS (anyone can view the site content) ============
+    match /events/{eventId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ============ ADMIN ACCESS CONTROL ============
+    // Only users whose UID exists as a document ID in /admins can write
+    match /admins/{userId} {
+      // Anyone can read the existence of their own admin doc (used by client to know if they are admin)
+      allow read: if request.auth != null && request.auth.uid == userId;
+      // Only existing admins can manage the admins list (or bootstrap via console)
+      allow write: if isAdmin();
+    }
+
+    // Helper function
+    function isAdmin() {
+      return request.auth != null &&
+             exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Deny everything else by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
