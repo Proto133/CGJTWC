@@ -23,10 +23,36 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ============ PENDING ADMIN ACCESS REQUESTS ============
+    // A newly signed-up user writes exactly one doc here, keyed by their own
+    // UID. Approving someone = copying this doc ID into /admins/{uid}.
+    // Creating a request grants NO privileges on its own.
+    match /accessRequests/{userId} {
+      allow create: if request.auth != null
+                    && request.auth.uid == userId
+                    && isValidAccessRequest();
+      // Requests are private: only admins can review or clear them.
+      allow read, update, delete: if isAdmin();
+    }
+
     // Helper function
     function isAdmin() {
       return request.auth != null &&
              exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Locks the shape of an access request so it cannot be used as free storage.
+    function isValidAccessRequest() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['firstName', 'lastName', 'email', 'phone', 'createdAt'])
+             && d.keys().hasAll(['firstName', 'lastName', 'email', 'createdAt'])
+             && d.firstName is string && d.firstName.size() > 0 && d.firstName.size() <= 60
+             && d.lastName is string && d.lastName.size() > 0 && d.lastName.size() <= 60
+             // Prevents submitting a request under someone else's address.
+             && d.email is string && d.email == request.auth.token.email
+             && (!('phone' in d.keys()) || (d.phone is string && d.phone.size() <= 30))
+             // Blocks backdating; serverTimestamp() resolves to request.time.
+             && d.createdAt == request.time;
     }
 
     // Deny everything else by default

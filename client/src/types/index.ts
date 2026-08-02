@@ -1,4 +1,4 @@
-import { Timestamp } from 'firebase/firestore'
+import type { Timestamp } from 'firebase/firestore'
 
 export interface Event {
   id: string
@@ -26,6 +26,16 @@ export interface AdminDoc {
   email?: string
   name?: string
   addedAt?: Timestamp
+}
+
+// Written to /accessRequests/{uid} when someone signs up. Document ID is the
+// Firebase Auth UID, so approving = copying that ID into /admins/{uid}.
+export interface AccessRequest {
+  firstName: string
+  lastName: string
+  email: string
+  phone?: string
+  createdAt: Timestamp
 }
 
 export type EventType = Event['type']
