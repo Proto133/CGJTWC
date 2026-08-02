@@ -3,9 +3,11 @@ import { ref, watch } from 'vue'
 import { date } from 'quasar'
 import type { Event, EventType } from 'src/types'
 
+// `| undefined` is required because the project enables
+// `exactOptionalPropertyTypes`, and the parent binds `editingEvent || undefined`.
 const props = defineProps<{
-  modelValue?: Partial<Event>
-  loading?: boolean
+  modelValue?: Partial<Event> | undefined
+  loading?: boolean | undefined
 }>()
 
 const emit = defineEmits<{

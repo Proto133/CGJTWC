@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 
+type Twttr = { widgets: { load: (el?: HTMLElement) => void } }
+
 const props = defineProps<{
   handle?: string
   limit?: number
@@ -9,20 +11,37 @@ const props = defineProps<{
 const handle = props.handle || 'CGJTWrestling'
 const limit = props.limit || 4
 const loaded = ref(false)
+const container = ref<HTMLElement | null>(null)
 
-// Load Twitter/X widget script once
+const SCRIPT_SRC = 'https://platform.twitter.com/widgets.js'
+
+// The widget script only auto-scans the DOM the first time it loads. On any
+// subsequent SPA navigation the script is already cached, so we have to ask it
+// to re-scan our container explicitly or the embed never renders.
+function renderWidget() {
+  const twttr = (window as unknown as { twttr?: Twttr }).twttr
+  if (!twttr?.widgets || !container.value) return
+  twttr.widgets.load(container.value)
+  loaded.value = true
+}
+
 function loadXScript() {
-  if ((window as any).twttr) {
-    loaded.value = true
+  if ((window as unknown as { twttr?: Twttr }).twttr) {
+    renderWidget()
+    return
+  }
+
+  // Reuse an in-flight script tag instead of appending a duplicate.
+  const existing = document.querySelector<HTMLScriptElement>(`script[src="${SCRIPT_SRC}"]`)
+  if (existing) {
+    existing.addEventListener('load', renderWidget, { once: true })
     return
   }
 
   const script = document.createElement('script')
-  script.src = 'https://platform.twitter.com/widgets.js'
+  script.src = SCRIPT_SRC
   script.async = true
-  script.onload = () => {
-    loaded.value = true
-  }
+  script.addEventListener('load', renderWidget, { once: true })
   document.head.appendChild(script)
 }
 
@@ -32,7 +51,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="x-embed q-pa-md bg-white">
+  <div ref="container" class="x-embed q-pa-md bg-white">
     <div class="row items-center q-mb-md">
       <q-icon name="fab fa-x-twitter" size="md" class="q-mr-sm" />
       <div>

@@ -2,9 +2,11 @@
 import { ref, watch } from 'vue'
 import type { Announcement } from 'src/types'
 
+// `| undefined` is required because the project enables
+// `exactOptionalPropertyTypes`, and the parent binds `editingAnnouncement || undefined`.
 const props = defineProps<{
-  modelValue?: Partial<Announcement>
-  loading?: boolean
+  modelValue?: Partial<Announcement> | undefined
+  loading?: boolean | undefined
 }>()
 
 const emit = defineEmits<{

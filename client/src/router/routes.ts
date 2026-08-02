@@ -1,5 +1,11 @@
 import type { RouteRecordRaw } from 'vue-router'
 
+declare module 'vue-router' {
+  interface RouteMeta {
+    requiresAuth?: boolean
+  }
+}
+
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
