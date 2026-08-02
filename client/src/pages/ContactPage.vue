@@ -58,7 +58,7 @@ function submitContact() {
         Cary Grove Community Center / District 26 Schools<br>
         Cary, IL<br><br>
 
-        <strong>Email:</strong> info@cgjtwrestling.org<br>
+        <strong>Email:</strong> admin@trojanswrestlingclub.com<br>
         <strong>Follow:</strong> @CGJTWrestling on X
       </div>
     </div>

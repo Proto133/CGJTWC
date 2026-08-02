@@ -26,7 +26,7 @@ function toggleDrawer() {
         <!-- Logo / Brand -->
         <q-toolbar-title class="text-h6 text-weight-bold">
           <router-link to="/" class="text-white" style="text-decoration: none">
-            <span class="text-gold">CGJT</span> Wrestling
+           <q-avatar icon="../../public/assets/JTWC.png"/> Trojans Wrestling Club
           </router-link>
         </q-toolbar-title>
 
@@ -111,8 +111,8 @@ function toggleDrawer() {
         <div class="text-right text-caption">
           <div>© {{ new Date().getFullYear() }} CGJT Wrestling</div>
           <div>
-            <a href="https://x.com/CGJTWrestling" target="_blank" class="q-ml-sm">X</a>
-            <a href="mailto:info@cgjtwrestling.org" class="q-ml-sm">Email</a>
+            <a href="https://x.com/_wetesy_" target="_blank" class="q-ml-sm">X</a>
+            <a href="mailto:admin@trojanswrestlingclub.com" class="q-ml-sm">Email</a>
           </div>
         </div>
       </div>
