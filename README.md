@@ -60,6 +60,7 @@ After creation, your folder should look like:
 CGJT/
 ├── client/                 # ← Quasar project lives here
 ├── firebase/               # firestore.rules (we provide)
+├── firebase.json           # points at firebase/firestore.rules
 ├── README.md
 └── .gitignore
 ```
@@ -128,50 +129,86 @@ The rules in `firebase/firestore.rules` are the security layer that prevents ran
 npm install -g firebase-tools
 firebase login
 
-firebase init
-
-# Choose:
-# - Firestore: yes (select existing project you just created)
-# - Rules file: accept default (firestore.rules) or point it to the one in ./firebase/firestore.rules
-# - Hosting: yes (we'll configure later)
-# - Public directory: client/dist/spa
-# - SPA rewrite: yes (single page app)
-
-# Now deploy the rules
+# firebase.json in this repo already points at ./firebase/firestore.rules,
+# so you can deploy directly — no `firebase init` needed for rules.
 firebase deploy --only firestore:rules
 ```
 
+You should see `rules file ./firebase/firestore.rules compiled successfully`. If the CLI
+cannot find the file, check the `firestore.rules` path in `firebase.json`.
+
 You can also copy the contents of `firebase/firestore.rules` directly into the Firebase console (Firestore → Rules tab) for the first time.
 
-### 7. Create Your First Admin User
+> **Do not skip this step.** A brand-new Firestore database starts in test mode,
+> which lets *anyone* on the internet read and write every collection — including
+> the contact details in `admins` and `accessRequests`. Nothing in the app is
+> actually protected until these rules are deployed.
 
-1. Start the dev server:
+To confirm the rules are live, open the **Rules** tab in the console and check that
+the published version ends with the catch-all `allow read, write: if false;` block.
+
+### 7. Create Your First Admin User (Bootstrap)
+
+The very first admin has to be created by hand, because there is no existing admin
+around to approve anyone yet. Do this in the Firebase Console:
+
+1. Go to **Authentication** → **Users** → **Add user**
+   - Enter the email and a password you want to use
+   - Save, then copy the **User UID** (long string like `aBcD123...`)
+
+   > If the Users tab is missing, Authentication was never initialized — click
+   > **Get started**, then enable **Email/Password** under Sign-in method.
+
+2. Go to **Firestore Database** → **Start collection**
+   - Collection ID: `admins`
+   - Document ID: paste the **UID** you copied
+   - Fields are optional and purely informational (e.g. `firstName`, `lastName`,
+     `email`, `phone`) — the app only checks that the document *exists*
+   - Save
+
+3. Start the dev server and sign in:
    ```bash
    cd client
    quasar dev
    ```
+   Go to `http://localhost:9000/admin/login` and log in with those credentials.
+   You should now be able to create Events and Announcements.
 
-2. Go to `http://localhost:9000/admin/login`
+### 7b. Approving Additional Admins (Self-Serve Signup)
 
-3. Create an account using **Email/Password** (the same one you want as admin).
+After the first admin exists, other volunteers can request access from the site
+instead of you creating their accounts manually.
 
-   > Note: At this point writes will fail — this is expected.
+**What they do:**
+1. Go to `/admin/login` and click **Request admin access**
+2. Fill in first name, last name, email, optional phone, and a password
+3. On submit the app creates their Firebase Auth account, files a request, and
+   signs them straight back out with a "waiting for approval" message
 
-4. Go to Firebase Console → **Authentication** → **Users**
-   - Find the user you just created
-   - Copy the **User UID** (long string like `aBcD123...`)
+**What you do:**
+1. Open **Firestore Database** → `accessRequests`
+2. Each document holds their name, email and phone — and **the document ID is
+   their Auth UID**
+3. To approve: copy that document ID and create a document with the *same ID*
+   in the `admins` collection
+4. To reject: delete the request document (and optionally delete the user under
+   **Authentication → Users**)
+5. Optionally delete the request doc after approving — it is only an inbox
 
-5. Go to **Firestore Database** → **Start collection**
-   - Collection ID: `admins`
-   - Document ID: paste the **UID** you copied
-   - Add any fields you want (optional: `email`, `name`, `addedAt`)
-   - Save
-
-6. Refresh the site. You should now be able to create Events and Announcements.
+The requester can sign in normally as soon as the `admins` document exists; no
+redeploy or restart is needed.
 
 **Security Rules Explanation**:
 - Anyone (even logged out) can read `events` and `announcements`
 - Only users whose UID exists as a document in `/admins/{uid}` can create/update/delete
+- `admins` documents are readable only by the matching signed-in user
+- `accessRequests` can only be *created* by a signed-in user for their own UID,
+  with a fixed set of fields, length limits, a server-generated `createdAt`, and
+  an email that must match their authenticated account. Only admins can read,
+  edit, or delete them, so the collection cannot be used to harvest contact
+  details or as free storage
+- Creating an access request grants **no** privileges by itself
+- Everything else is denied by a catch-all rule
 
 ### 8. (Optional but Recommended) Set Up Firebase Hosting
 
@@ -198,11 +235,16 @@ Your site will be live at `https://your-project.web.app`
 The Home page includes an official X embedded timeline.
 
 1. Find the real club handle (e.g. `@CGJTWrestling`)
-2. Open `client/src/components/XTimeline.vue`
-3. Change the `href` and text from the placeholder to the real account
-4. (Optional) Adjust `data-tweet-limit`
+2. Open `client/src/pages/IndexPage.vue` and update the `handle` prop on the
+   `<XTimeline />` tag (the `limit` prop controls how many posts show)
+3. The default handle lives in `client/src/components/XTimeline.vue` if you
+   prefer to change it in one place
 
 The embed is mobile-friendly and updates automatically.
+
+> X aggressively rate-limits its timeline widget. Seeing `429` responses for
+> `platform.twitter.com` in the console — especially from `localhost` or for a
+> placeholder/private account — is an X-side limit, not a bug in this app.
 
 ---
 
@@ -295,10 +337,25 @@ quasar test         # (later)
 **admins** collection (for access control)
 ```ts
 // Document ID = Firebase Auth UID
+// Existence of the document is what grants access; fields are informational only
 {
+  firstName?: string
+  lastName?: string
   email?: string
-  name?: string
-  addedAt: Timestamp
+  phone?: string
+}
+```
+
+**accessRequests** collection (pending admin approvals)
+```ts
+// Document ID = Firebase Auth UID of the requester
+// Approve by copying this document ID into the `admins` collection
+{
+  firstName: string
+  lastName: string
+  email: string        // must match the requester's authenticated email
+  phone?: string
+  createdAt: Timestamp // server-generated
 }
 ```
 
@@ -307,7 +364,8 @@ quasar test         # (later)
 ## Customization Points
 
 - **Colors**: `client/quasar.config.ts` → `brand` section
-- **X Handle**: `client/src/components/XTimeline.vue`
+- **X Handle**: `handle` prop in `client/src/pages/IndexPage.vue` (default lives in `client/src/components/XTimeline.vue`)
+- **Admin approvals**: `accessRequests` → `admins` in Firestore (see step 7b)
 - **Site name / tagline**: Multiple places (quasar.config + pages) — search for "Cary Grove Junior Trojans"
 - **Contact info**: `ContactPage.vue` + footer in MainLayout
 - **Sample data**: Use the admin UI after first admin is set up
@@ -340,11 +398,30 @@ Quasar's layout system (QHeader, QDrawer, QPageContainer) is mobile-first by def
 **"Missing or insufficient permissions" on create**  
 → You have not created the matching document in the `admins` collection yet. See step 7.
 
+**Anyone can read or write the database**  
+→ The security rules were never deployed and Firestore is still in test mode. Run
+`firebase deploy --only firestore:rules` from the project root. See step 6.
+
+**A volunteer signed up but still can't get in**  
+→ Signing up only files a request. Approve them by copying their document ID from
+`accessRequests` into the `admins` collection. See step 7b.
+
+**"Request submitted" never appears / request fails to save**  
+→ The rules for `accessRequests` were not deployed, or the submitted email does not
+match the authenticated account. Redeploy the rules and try again.
+
 **Firebase config not loading**  
 → Make sure variables start with `VITE_` and you restarted `quasar dev` after editing `.env`.
 
+**Wrong project in the Firebase Console**  
+→ The console URL contains an account index (`/u/0/`). If you see "no project or you
+lack permissions", you are signed into the wrong Google account — switch accounts or
+try `/u/1/`. Also confirm you are in the project matching `VITE_FIREBASE_PROJECT_ID`
+in `client/.env`.
+
 **X timeline not showing**  
-→ The account must be public. Also check browser console for widget script errors.
+→ The account must be public. Also check browser console for widget script errors;
+repeated `429` responses mean X is rate-limiting the widget.
 
 **Real-time not updating**  
 → Check that `onSnapshot` listeners are active (they are in the Pinia stores).
