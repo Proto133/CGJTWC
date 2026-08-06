@@ -39,3 +39,20 @@ export interface AccessRequest {
 }
 
 export type EventType = Event['type']
+
+// Shapes emitted by the admin forms.
+export interface EventFormPayload {
+  title: string
+  date: Date
+  time?: string
+  location: string
+  type: EventType
+  opponent?: string
+  description?: string
+}
+
+export interface AnnouncementFormPayload {
+  title: string
+  body: string
+  pinned: boolean
+}

@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore'
 import { db } from 'src/firebase'
 import { Notify } from 'quasar'
+import { errorMessage } from 'src/utils/errors'
 import type { Announcement } from 'src/types'
 
 export const useAnnouncementsStore = defineStore('announcements', () => {
@@ -64,8 +65,11 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
       })
       Notify.create({ type: 'positive', message: 'Announcement published' })
       return true
-    } catch (error: any) {
-      Notify.create({ type: 'negative', message: error.message || 'Failed to publish announcement' })
+    } catch (error: unknown) {
+      Notify.create({
+        type: 'negative',
+        message: errorMessage(error, 'Failed to publish announcement'),
+      })
       return false
     }
   }
@@ -78,8 +82,11 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
       })
       Notify.create({ type: 'positive', message: 'Announcement updated' })
       return true
-    } catch (error: any) {
-      Notify.create({ type: 'negative', message: error.message || 'Failed to update announcement' })
+    } catch (error: unknown) {
+      Notify.create({
+        type: 'negative',
+        message: errorMessage(error, 'Failed to update announcement'),
+      })
       return false
     }
   }
@@ -89,8 +96,11 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
       await deleteDoc(doc(db, 'announcements', id))
       Notify.create({ type: 'positive', message: 'Announcement deleted' })
       return true
-    } catch (error: any) {
-      Notify.create({ type: 'negative', message: error.message || 'Failed to delete announcement' })
+    } catch (error: unknown) {
+      Notify.create({
+        type: 'negative',
+        message: errorMessage(error, 'Failed to delete announcement'),
+      })
       return false
     }
   }

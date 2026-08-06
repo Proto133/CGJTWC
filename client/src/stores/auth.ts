@@ -10,13 +10,7 @@ import type { User } from 'firebase/auth'
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from 'src/firebase'
 import { Notify } from 'quasar'
-
-/** Firebase throws untyped errors; this narrows to the `code` we branch on. */
-function errorCode(error: unknown): string {
-  return typeof error === 'object' && error !== null && 'code' in error
-    ? String(error.code)
-    : ''
-}
+import { errorCode } from 'src/utils/errors'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)

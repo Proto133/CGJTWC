@@ -14,7 +14,8 @@ import {
 } from 'firebase/firestore'
 import { db } from 'src/firebase'
 import { Notify } from 'quasar'
-import type { Event, EventType } from 'src/types'
+import { errorMessage } from 'src/utils/errors'
+import type { Event, EventType, EventFormPayload } from 'src/types'
 
 export const useEventsStore = defineStore('events', () => {
   const events = ref<Event[]>([])
@@ -69,23 +70,31 @@ export const useEventsStore = defineStore('events', () => {
       })
       Notify.create({ type: 'positive', message: 'Event created successfully' })
       return true
-    } catch (error: any) {
-      Notify.create({ type: 'negative', message: error.message || 'Failed to create event' })
+    } catch (error: unknown) {
+      Notify.create({
+        type: 'negative',
+        message: errorMessage(error, 'Failed to create event'),
+      })
       return false
     }
   }
 
-  async function updateEvent(id: string, payload: Partial<Event>) {
+  // Takes the form payload rather than Partial<Event>: the form supplies a
+  // native Date, which is converted to a Timestamp here before writing.
+  async function updateEvent(id: string, payload: Partial<EventFormPayload>) {
     try {
-      const updateData: any = { ...payload, updatedAt: serverTimestamp() }
-      if (payload.date && payload.date instanceof Date) {
+      const updateData: Record<string, unknown> = { ...payload, updatedAt: serverTimestamp() }
+      if (payload.date instanceof Date) {
         updateData.date = Timestamp.fromDate(payload.date)
       }
       await updateDoc(doc(db, 'events', id), updateData)
       Notify.create({ type: 'positive', message: 'Event updated' })
       return true
-    } catch (error: any) {
-      Notify.create({ type: 'negative', message: error.message || 'Failed to update event' })
+    } catch (error: unknown) {
+      Notify.create({
+        type: 'negative',
+        message: errorMessage(error, 'Failed to update event'),
+      })
       return false
     }
   }
@@ -95,8 +104,11 @@ export const useEventsStore = defineStore('events', () => {
       await deleteDoc(doc(db, 'events', id))
       Notify.create({ type: 'positive', message: 'Event deleted' })
       return true
-    } catch (error: any) {
-      Notify.create({ type: 'negative', message: error.message || 'Failed to delete event' })
+    } catch (error: unknown) {
+      Notify.create({
+        type: 'negative',
+        message: errorMessage(error, 'Failed to delete event'),
+      })
       return false
     }
   }
