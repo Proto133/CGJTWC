@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { useAuthStore } from 'stores/auth'
 import { useRouter } from 'vue-router'
+import { organization } from 'src/config/organization'
 
+const org = organization
 const authStore = useAuthStore()
 const router = useRouter()
 
@@ -16,7 +18,7 @@ async function handleLogout() {
     <q-header class="bg-primary text-white" elevated>
       <q-toolbar>
         <q-toolbar-title class="admin-title">
-          Trojans <span class="admin-title__muted">Admin</span>
+          {{ org.identity.shortName }} <span class="admin-title__muted">Admin</span>
         </q-toolbar-title>
 
         <div class="q-gutter-x-sm">

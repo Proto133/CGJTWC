@@ -2,12 +2,21 @@
 // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file
 
 import { configure } from 'quasar/wrappers'
+import { organization } from './src/config/organization'
 
-export default configure((ctx) => {
+export default configure(() => {
   return {
     eslint: {
       warnings: true,
       errors: true,
+    },
+
+    // Feeds index.html's <%= productName %> / <%= productDescription %> so the
+    // browser tab title also comes from src/config/organization.ts rather than
+    // package.json.
+    htmlVariables: {
+      productName: organization.identity.name,
+      productDescription: organization.identity.heroTagline,
     },
 
     // https://v2.quasar.dev/quasar-cli-vite/prefetch-feature

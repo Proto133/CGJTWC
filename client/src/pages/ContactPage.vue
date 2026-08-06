@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { Notify } from 'quasar'
+import {
+  organization,
+  socialLinks,
+  mailtoHref,
+  addressLines,
+} from 'src/config/organization'
+
+const org = organization
 
 const form = ref({
   name: '',
@@ -29,9 +37,7 @@ function submitContact() {
       <header class="page-header">
         <div class="eyebrow">Get In Touch</div>
         <h1 class="page-title">Contact Us</h1>
-        <p class="lead">
-          Questions about the program, registration or volunteering? Reach out anytime.
-        </p>
+        <p class="lead">{{ org.content.contactIntro }}</p>
       </header>
 
       <q-card flat bordered class="q-pa-md">
@@ -67,9 +73,7 @@ function submitContact() {
             <div class="info-tile">
               <div class="info-tile__label">Practice Location</div>
               <div class="info-tile__value">
-                Cary Grove Community Center<br />
-                District 26 Schools<br />
-                Cary, IL
+                <div v-for="line in addressLines" :key="line">{{ line }}</div>
               </div>
             </div>
           </div>
@@ -77,16 +81,22 @@ function submitContact() {
             <div class="info-tile">
               <div class="info-tile__label">Reach Us</div>
               <div class="info-tile__value">
-                <a href="mailto:admin@trojanswrestlingclub.com" class="info-link">
-                  admin@trojanswrestlingclub.com
-                </a>
-                <br />
-                <a
-                  href="https://x.com/CGJTWrestling"
-                  target="_blank"
-                  rel="noopener"
-                  class="info-link"
-                >@CGJTWrestling on X</a>
+                <div>
+                  <a :href="mailtoHref" class="info-link">{{ org.contact.email }}</a>
+                </div>
+                <div v-if="org.contact.phone">
+                  <a :href="`tel:${org.contact.phone}`" class="info-link">
+                    {{ org.contact.phone }}
+                  </a>
+                </div>
+                <div v-for="social in socialLinks" :key="social.key">
+                  <a
+                    :href="social.url"
+                    target="_blank"
+                    rel="noopener"
+                    class="info-link"
+                  >{{ social.handle }} on {{ social.label }}</a>
+                </div>
               </div>
             </div>
           </div>

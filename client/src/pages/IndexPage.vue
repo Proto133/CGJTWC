@@ -5,7 +5,9 @@ import { useAnnouncementsStore } from 'stores/announcements'
 import EventCard from 'components/EventCard.vue'
 import AnnouncementCard from 'components/AnnouncementCard.vue'
 import XTimeline from 'components/XTimeline.vue'
+import { organization } from 'src/config/organization'
 
+const org = organization
 const eventsStore = useEventsStore()
 const announcementsStore = useAnnouncementsStore()
 
@@ -31,11 +33,11 @@ onUnmounted(() => {
       <img src="/assets/JTWC-white-512.png" alt="" class="hero__watermark" aria-hidden="true" />
 
       <div class="page-shell hero__inner">
-        <div class="hero__eyebrow">Cary, Illinois</div>
+        <div class="hero__eyebrow">{{ org.location.city }}, {{ org.location.state }}</div>
         <h1 class="display-xl hero__title">
-          Trojans<br />Wrestling Club
+          {{ org.identity.heroLine1 }}<br />{{ org.identity.heroLine2 }}
         </h1>
-        <p class="hero__tagline">Building strength, discipline and champions.</p>
+        <p class="hero__tagline">{{ org.identity.heroTagline }}</p>
 
         <div class="hero__actions">
           <q-btn
@@ -66,11 +68,7 @@ onUnmounted(() => {
       <section class="section row q-col-gutter-lg">
         <div class="col-12 col-md-7">
           <h2 class="section-title">About the Club</h2>
-          <p class="lead q-mt-md">
-            The Trojans Wrestling Club develops young athletes in the Cary Grove community through
-            hard work, sportsmanship and a love for the sport. We welcome wrestlers of all
-            experience levels.
-          </p>
+          <p class="lead q-mt-md">{{ org.content.aboutTeaser }}</p>
           <q-btn
             to="/about"
             label="Learn more"
@@ -83,7 +81,7 @@ onUnmounted(() => {
         </div>
 
         <div class="col-12 col-md-5">
-          <XTimeline handle="CGJTWrestling" :limit="3" />
+          <XTimeline :limit="3" />
         </div>
       </section>
 
@@ -141,8 +139,8 @@ onUnmounted(() => {
 
       <!-- Call to action -->
       <section class="section cta">
-        <h2 class="cta__title">Ready to wrestle?</h2>
-        <p class="cta__text">New wrestlers and families are always welcome.</p>
+        <h2 class="cta__title">{{ org.content.ctaHeading }}</h2>
+        <p class="cta__text">{{ org.content.ctaText }}</p>
         <q-btn
           to="/contact"
           label="Contact Us"

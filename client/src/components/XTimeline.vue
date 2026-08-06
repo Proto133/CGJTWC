@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { xHandle, xSocial } from 'src/config/organization'
 
 type Twttr = { widgets: { load: (el?: HTMLElement) => void } }
 
@@ -8,8 +9,10 @@ const props = defineProps<{
   limit?: number
 }>()
 
-const handle = props.handle || 'CGJTWrestling'
+// Falls back to the account configured in src/config/organization.ts.
+const handle = props.handle || xHandle
 const limit = props.limit || 4
+const brandIcon = xSocial?.svgPath ?? ''
 const loaded = ref(false)
 const container = ref<HTMLElement | null>(null)
 
@@ -53,7 +56,12 @@ onMounted(() => {
 <template>
   <div ref="container" class="x-embed q-pa-md bg-white">
     <div class="row items-center q-mb-md">
-      <q-icon name="fab fa-x-twitter" size="md" class="q-mr-sm" />
+      <!-- Inline brand mark: the bundled material-icons set has no brand glyphs,
+           and the previous "fab fa-x-twitter" name required Font Awesome, which
+           is not installed, so nothing rendered. -->
+      <svg v-if="brandIcon" viewBox="0 0 24 24" class="x-brand q-mr-sm" aria-hidden="true">
+        <path :d="brandIcon" fill="currentColor" />
+      </svg>
       <div>
         <div class="text-weight-bold">Follow us on X</div>
         <div class="text-caption text-grey-6">@{{ handle }}</div>
