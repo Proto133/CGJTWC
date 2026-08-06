@@ -1,151 +1,340 @@
 // ============================================
-// CGJT - Cary Grove Junior Trojans
-// Navy Blue + White Theme (Mobile First)
+// Trojans Wrestling Club
+// Navy / White / Grey  ·  Mobile First
 // ============================================
 
-// Brand Colors
-$navy: #00205B;
-$navy-dark: #00153D;
-$navy-light: #1A3A7A;
-$white: #FFFFFF;
-$off-white: #F8F9FA;
-$gold: #C9A227;
-$text-dark: #1F2937;
-$text-muted: #6B7280;
+// --------------------------------------------
+// 1. Design tokens
+// --------------------------------------------
 
-// Quasar Brand Overrides (CSS variables)
+// Navy ramp — the dominant brand colour
+$navy-900: #00153D;
+$navy-800: #00205B;   // primary
+$navy-700: #0B2E73;
+$navy-600: #1A3A7A;
+
+// Neutral ramp — carries all accent and secondary work now that gold is gone
+$grey-050: #F7F8FA;
+$grey-100: #EEF1F5;
+$grey-200: #DFE4EB;
+$grey-300: #C7CFDA;
+$grey-400: #9AA6B6;
+$grey-500: #6B7684;
+$grey-600: #4A5462;
+$grey-900: #1B2129;
+
+$white: #FFFFFF;
+
+// Semantic aliases
+$surface: $white;
+$surface-sunken: $grey-050;
+$text: $grey-900;
+$text-muted: $grey-500;
+$border: $grey-200;
+
+// Type
+$font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+$font-display: 'Barlow Condensed', 'Inter', system-ui, sans-serif;
+
+// Radius / elevation
+$radius-sm: 8px;
+$radius-md: 14px;
+$radius-lg: 22px;
+$shadow-sm: 0 1px 2px rgba(0, 21, 61, 0.06), 0 1px 3px rgba(0, 21, 61, 0.04);
+$shadow-md: 0 4px 12px rgba(0, 21, 61, 0.08);
+$shadow-lg: 0 14px 34px rgba(0, 21, 61, 0.14);
+
+// Quasar brand overrides, plus the same tokens exposed as CSS custom
+// properties. SCSS variables are not visible inside component <style> blocks,
+// so anything a component needs has to be available as a CSS variable.
 :root {
-  --q-primary: #{$navy};
-  --q-secondary: #{$white};
-  --q-accent: #{$gold};
-  --q-dark: #{$navy-dark};
+  --q-primary: #{$navy-800};
+  --q-secondary: #{$grey-600};
+  --q-accent: #{$grey-400};
+  --q-dark: #{$navy-900};
   --q-positive: #10B981;
   --q-negative: #EF4444;
   --q-info: #3B82F6;
   --q-warning: #F59E0B;
+
+  --navy-900: #{$navy-900};
+  --navy-800: #{$navy-800};
+  --navy-700: #{$navy-700};
+  --navy-600: #{$navy-600};
+
+  --grey-050: #{$grey-050};
+  --grey-100: #{$grey-100};
+  --grey-200: #{$grey-200};
+  --grey-300: #{$grey-300};
+  --grey-400: #{$grey-400};
+  --grey-500: #{$grey-500};
+  --grey-600: #{$grey-600};
+  --grey-900: #{$grey-900};
+
+  --font-display: #{$font-display};
+  --font-body: #{$font-body};
+
+  --radius-sm: #{$radius-sm};
+  --radius-md: #{$radius-md};
+  --radius-lg: #{$radius-lg};
+
+  --section-gap: clamp(2.75rem, 7vw, 5rem);
+  --gutter: clamp(1rem, 4vw, 2rem);
 }
 
-// Global Typography & Base
+// --------------------------------------------
+// 2. Base
+// --------------------------------------------
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  color: $text-dark;
-  background: $off-white;
+  font-family: $font-body;
+  color: $text;
+  background: $surface-sunken;
+  -webkit-font-smoothing: antialiased;
 }
 
-h1, h2, h3, h4, h5 {
+// Quasar sizes bare h1..h6 with fixed Material values (h1 is 96px, h2 is 60px)
+// and never scales them down, which pushed headings wider than small viewports.
+// Neutralise those defaults and drive size from a fluid scale instead.
+h1, h2, h3, h4, h5, h6 {
+  font-family: $font-display;
   font-weight: 700;
-  color: $navy;
+  color: $navy-800;
+  letter-spacing: -0.01em;
+  line-height: 1.08;
+  margin: 0;
 }
+
+h1 { font-size: clamp(2.1rem, 7vw, 3.4rem); }
+h2 { font-size: clamp(1.75rem, 5.2vw, 2.6rem); }
+h3 { font-size: clamp(1.4rem, 4vw, 1.95rem); }
+h4 { font-size: clamp(1.2rem, 3vw, 1.5rem); }
+h5 { font-size: 1.15rem; }
+h6 { font-size: 1rem; }
+
+p { line-height: 1.65; }
 
 a {
-  color: $navy;
+  color: $navy-800;
   text-decoration: none;
 
-  &:hover {
-    color: $navy-light;
-  }
+  &:hover { color: $navy-600; }
 }
 
-// Navy buttons and primary actions
-.q-btn--standard.bg-primary {
-  background: $navy !important;
-  color: $white !important;
+// --------------------------------------------
+// 3. Typographic scale helpers
+// --------------------------------------------
 
-  &:hover {
-    background: $navy-light !important;
-  }
+.display-xl {
+  font-family: $font-display;
+  font-weight: 700;
+  font-size: clamp(2.4rem, 9vw, 4.5rem);
+  line-height: 1.02;
+  letter-spacing: 0.005em;
+  text-transform: uppercase;
 }
 
-// Gold accent buttons (for CTAs)
-.q-btn.gold-accent {
-  background: $gold !important;
-  color: $navy-dark !important;
-  font-weight: 600;
-
-  &:hover {
-    background: #B38B1E !important;
-  }
+.page-title {
+  font-family: $font-display;
+  font-weight: 700;
+  font-size: clamp(2rem, 6.5vw, 3rem);
+  line-height: 1.06;
+  text-transform: uppercase;
+  color: $navy-800;
+  // Long single words such as "Announcements" at display size will otherwise
+  // force the document wider than the viewport.
+  overflow-wrap: break-word;
 }
 
-// Cards
-.q-card {
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 32, 91, 0.08);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(0, 32, 91, 0.12);
-  }
-}
-
-// Section headers
 .section-title {
+  font-family: $font-display;
+  font-weight: 700;
+  font-size: clamp(1.6rem, 5vw, 2.25rem);
+  line-height: 1.1;
+  text-transform: uppercase;
+  color: $navy-800;
+  overflow-wrap: break-word;
+  display: block;
+  padding-bottom: 10px;
   position: relative;
-  display: inline-block;
-  padding-bottom: 8px;
 
   &::after {
     content: '';
     position: absolute;
     bottom: 0;
     left: 0;
-    width: 48px;
+    width: 44px;
     height: 3px;
-    background: $gold;
+    background: $navy-800;
     border-radius: 3px;
   }
 }
 
-// Mobile-first responsive helpers
-.mobile-only {
-  @media (min-width: 600px) {
-    display: none !important;
+.subsection-title {
+  font-family: $font-display;
+  font-weight: 600;
+  font-size: 1.15rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: $text-muted;
+}
+
+.eyebrow {
+  font-family: $font-display;
+  font-weight: 600;
+  font-size: 0.85rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: $grey-400;
+}
+
+.lead {
+  font-size: clamp(1rem, 2.4vw, 1.15rem);
+  line-height: 1.7;
+  color: $grey-600;
+}
+
+// --------------------------------------------
+// 4. Layout primitives
+// --------------------------------------------
+
+.page-shell {
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-left: var(--gutter);
+  padding-right: var(--gutter);
+}
+
+.page-shell--narrow { max-width: 760px; }
+.page-shell--mid { max-width: 920px; }
+
+.section { margin-top: var(--section-gap); }
+
+.page-header {
+  padding-top: clamp(1.5rem, 5vw, 3rem);
+  padding-bottom: clamp(1rem, 3vw, 1.5rem);
+}
+
+// --------------------------------------------
+// 5. Components
+// --------------------------------------------
+
+.q-card {
+  border-radius: $radius-md;
+  border: 1px solid $border;
+  box-shadow: $shadow-sm;
+  background: $surface;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+// Only lift on devices with a real pointer. On touch screens :hover sticks
+// after a tap, leaving cards stuck in the raised state.
+@media (hover: hover) and (pointer: fine) {
+  .q-card.card-interactive:hover {
+    transform: translateY(-3px);
+    box-shadow: $shadow-md;
   }
 }
 
-.desktop-only {
-  @media (max-width: 599px) {
-    display: none !important;
-  }
+.stat-tile {
+  background: $surface;
+  border: 1px solid $border;
+  border-radius: $radius-md;
+  padding: 1.1rem 1rem;
+  text-align: center;
 }
 
-// Admin dashboard specific
-.admin-card {
-  border-left: 5px solid $navy;
+// Compact date block used by event cards for quick scanning.
+.date-block {
+  flex: 0 0 auto;
+  width: 62px;
+  border-radius: $radius-sm;
+  background: $navy-800;
+  color: $white;
+  text-align: center;
+  padding: 8px 4px 10px;
+  line-height: 1;
+
+  &__month {
+    font-family: $font-display;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    opacity: 0.85;
+  }
+
+  &__day {
+    font-family: $font-display;
+    font-size: 1.7rem;
+    font-weight: 700;
+    margin-top: 3px;
+  }
 }
 
 .event-type-badge {
-  font-size: 0.75rem;
-  padding: 2px 10px;
+  display: inline-block;
+  font-size: 0.7rem;
+  padding: 3px 10px;
   border-radius: 9999px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
 }
 
-.type-practice { background: #E0E7FF; color: #3730A3; }
-.type-dual { background: #FEF3C7; color: #92400E; }
-.type-tournament { background: #FCE7F3; color: #9D174D; }
-.type-other { background: #E5E7EB; color: #374151; }
+// Neutral badge treatment; kept desaturated so nothing competes with the navy.
+.type-practice { background: $grey-100; color: $navy-700; }
+.type-dual { background: $navy-800; color: $white; }
+.type-tournament { background: $navy-600; color: $white; }
+.type-other { background: $grey-100; color: $grey-600; }
 
-// X embed container
-.x-embed {
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid #E5E7EB;
-}
-
-// Footer
-.site-footer {
-  background: $navy;
+.pinned-badge {
+  background: $navy-800;
   color: $white;
-
-  a {
-    color: rgba(255, 255, 255, 0.85);
-
-    &:hover {
-      color: $white;
-    }
-  }
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 9999px;
 }
+
+.x-embed {
+  border-radius: $radius-md;
+  overflow: hidden;
+  border: 1px solid $border;
+  background: $surface;
+}
+
+.admin-card {
+  border-left: 4px solid $navy-800;
+}
+
+.empty-state {
+  border: 1px dashed $grey-300;
+  border-radius: $radius-md;
+  padding: 1.75rem 1.25rem;
+  text-align: center;
+  color: $text-muted;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+// --------------------------------------------
+// 6. Accessibility helpers
+// --------------------------------------------
+
+// 44px is the commonly cited minimum comfortable touch target.
+.tap-target {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+// NOTE: do not define .mobile-only / .desktop-only here. Quasar already owns
+// those class names as *platform* classes:
+//   body:not(.mobile) .mobile-only { display: none !important }
+// Redefining them as width media queries meant the hamburger stayed hidden on
+// any desktop browser while the desktop nav was hidden below 600px, so narrow
+// windows had no navigation at all. Use Quasar's width classes (lt-md, gt-sm).

@@ -55,8 +55,8 @@ async function handleRequestAccess() {
   <q-page padding class="flex flex-center">
     <q-card class="admin-card" style="width: 100%; max-width: 380px;">
       <q-card-section>
-        <div class="text-h5 text-center text-primary q-mb-lg">
-          {{ mode === 'signin' ? 'CGJT Admin Login' : 'Request Admin Access' }}
+        <div class="login-heading q-mb-lg">
+          {{ mode === 'signin' ? 'Admin Login' : 'Request Admin Access' }}
         </div>
 
         <!-- SIGN IN -->
@@ -178,4 +178,13 @@ async function handleRequestAccess() {
 </template>
 
 <style scoped>
+.login-heading {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-align: center;
+  color: var(--navy-800);
+}
 </style>

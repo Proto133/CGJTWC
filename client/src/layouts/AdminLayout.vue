@@ -7,7 +7,7 @@ const router = useRouter()
 
 async function handleLogout() {
   await authStore.logout()
-  router.push('/admin/login')
+  void router.push('/admin/login')
 }
 </script>
 
@@ -15,8 +15,8 @@ async function handleLogout() {
   <q-layout view="lHh Lpr lFf">
     <q-header class="bg-primary text-white" elevated>
       <q-toolbar>
-        <q-toolbar-title class="text-h6">
-          <span class="text-gold">CGJT</span> Admin Dashboard
+        <q-toolbar-title class="admin-title">
+          Trojans <span class="admin-title__muted">Admin</span>
         </q-toolbar-title>
 
         <div class="q-gutter-x-sm">
@@ -44,7 +44,15 @@ async function handleLogout() {
 </template>
 
 <style scoped>
-.text-gold {
-  color: #C9A227;
+.admin-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.admin-title__muted {
+  color: rgba(255, 255, 255, 0.6);
 }
 </style>

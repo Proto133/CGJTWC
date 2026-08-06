@@ -5,7 +5,12 @@ import { useAnnouncementsStore } from 'stores/announcements'
 import { useAuthStore } from 'stores/auth'
 import EventForm from 'components/admin/EventForm.vue'
 import AnnouncementForm from 'components/admin/AnnouncementForm.vue'
-import type { Event, Announcement } from 'src/types'
+import type {
+  Event,
+  Announcement,
+  EventFormPayload,
+  AnnouncementFormPayload,
+} from 'src/types'
 import { Dialog } from 'quasar'
 
 const tab = ref<'events' | 'announcements'>('events')
@@ -40,7 +45,7 @@ function openEditEvent(event: Event) {
   showEventForm.value = true
 }
 
-async function saveEvent(payload: any) {
+async function saveEvent(payload: EventFormPayload) {
   let success = false
   if (editingEvent.value?.id) {
     success = await eventsStore.updateEvent(editingEvent.value.id, payload)
@@ -59,8 +64,8 @@ function confirmDeleteEvent(id: string) {
     message: 'This action cannot be undone.',
     cancel: true,
     persistent: true,
-  }).onOk(async () => {
-    await eventsStore.deleteEvent(id)
+  }).onOk(() => {
+    void eventsStore.deleteEvent(id)
   })
 }
 
@@ -75,7 +80,7 @@ function openEditAnnouncement(a: Announcement) {
   showAnnouncementForm.value = true
 }
 
-async function saveAnnouncement(payload: any) {
+async function saveAnnouncement(payload: AnnouncementFormPayload) {
   let success = false
   if (editingAnnouncement.value?.id) {
     success = await announcementsStore.updateAnnouncement(editingAnnouncement.value.id, payload)
@@ -94,8 +99,8 @@ function confirmDeleteAnnouncement(id: string) {
     message: 'This will remove it from the public site immediately.',
     cancel: true,
     persistent: true,
-  }).onOk(async () => {
-    await announcementsStore.deleteAnnouncement(id)
+  }).onOk(() => {
+    void announcementsStore.deleteAnnouncement(id)
   })
 }
 </script>
@@ -111,7 +116,7 @@ function confirmDeleteAnnouncement(id: string) {
       <div class="text-caption">Logged in as {{ authStore.user?.email }}</div>
     </div>
 
-    <q-tabs v-model="tab" class="q-mb-md" active-color="primary" indicator-color="gold">
+    <q-tabs v-model="tab" class="q-mb-md" active-color="primary" indicator-color="primary">
       <q-tab name="events" label="Events" icon="event" />
       <q-tab name="announcements" label="Announcements" icon="campaign" />
     </q-tabs>
@@ -190,7 +195,7 @@ function confirmDeleteAnnouncement(id: string) {
             <q-item-section>
               <q-item-label class="text-weight-medium">
                 {{ a.title }}
-                <q-badge v-if="a.pinned" color="gold" text-color="dark" class="q-ml-sm">Pinned</q-badge>
+                <span v-if="a.pinned" class="pinned-badge q-ml-sm">Pinned</span>
               </q-item-label>
               <q-item-label caption class="ellipsis" style="max-width: 420px">
                 {{ a.body }}

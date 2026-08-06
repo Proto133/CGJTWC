@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { date } from 'quasar'
-import type { Event, EventType } from 'src/types'
+import type { Event, EventType, EventFormPayload } from 'src/types'
 
 // `| undefined` is required because the project enables
 // `exactOptionalPropertyTypes`, and the parent binds `editingEvent || undefined`.
@@ -11,16 +11,28 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'save', payload: any): void
+  (e: 'save', payload: EventFormPayload): void
   (e: 'cancel'): void
 }>()
 
-const form = ref({
+// Typed explicitly so `type` stays an EventType rather than widening to string,
+// which would break the typed `save` payload.
+interface EventFormState {
+  title: string
+  date: string
+  time: string
+  location: string
+  type: EventType
+  opponent: string
+  description: string
+}
+
+const form = ref<EventFormState>({
   title: '',
   date: date.formatDate(new Date(), 'YYYY/MM/DD'),
   time: '',
   location: '',
-  type: 'dual' as EventType,
+  type: 'dual',
   opponent: '',
   description: '',
 })

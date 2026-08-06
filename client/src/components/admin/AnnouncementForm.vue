@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import type { Announcement } from 'src/types'
+import type { Announcement, AnnouncementFormPayload } from 'src/types'
 
 // `| undefined` is required because the project enables
 // `exactOptionalPropertyTypes`, and the parent binds `editingAnnouncement || undefined`.
@@ -10,7 +10,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'save', payload: any): void
+  (e: 'save', payload: AnnouncementFormPayload): void
   (e: 'cancel'): void
 }>()
 

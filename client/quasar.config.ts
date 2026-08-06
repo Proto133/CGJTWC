@@ -15,6 +15,7 @@ export default configure((ctx) => {
 
     // app boot file (/src/boot)
     boot: [
+      'fonts',
       'pinia',
     ],
 

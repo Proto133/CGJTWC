@@ -22,28 +22,36 @@ const filteredEvents = computed(() => {
 </script>
 
 <template>
-  <q-page padding>
-    <div style="max-width: 900px; margin: 0 auto;">
-      <h1 class="section-title q-mb-lg">Schedule &amp; Events</h1>
+  <q-page>
+    <div class="page-shell page-shell--mid">
+      <header class="page-header">
+        <div class="eyebrow">Season Calendar</div>
+        <h1 class="page-title">Schedule &amp; Events</h1>
+        <p class="lead">Practices, dual meets and tournaments for the season.</p>
+      </header>
 
-      <div class="q-mb-md">
-        <q-btn-toggle
-          v-model="filter"
-          toggle-color="primary"
-          :options="[
-            { label: 'Upcoming', value: 'upcoming' },
-            { label: 'Past', value: 'past' },
-            { label: 'All', value: 'all' },
-          ]"
-          unelevated
-        />
-      </div>
+      <!-- full-width on small screens so the control never overflows -->
+      <q-btn-toggle
+        v-model="filter"
+        toggle-color="primary"
+        text-color="primary"
+        color="white"
+        no-caps
+        spread
+        unelevated
+        class="filter-toggle q-mb-lg"
+        :options="[
+          { label: 'Upcoming', value: 'upcoming' },
+          { label: 'Past', value: 'past' },
+          { label: 'All', value: 'all' },
+        ]"
+      />
 
       <div v-if="eventsStore.loading" class="text-center q-pa-xl">
         <q-spinner color="primary" size="lg" />
       </div>
 
-      <div v-else-if="filteredEvents.length === 0" class="text-grey-6 q-pa-md">
+      <div v-else-if="filteredEvents.length === 0" class="empty-state">
         No events found for this filter.
       </div>
 
@@ -57,4 +65,11 @@ const filteredEvents = computed(() => {
 </template>
 
 <style scoped>
+.filter-toggle {
+  border: 1px solid var(--grey-200);
+  border-radius: 999px;
+  overflow: hidden;
+  width: 100%;
+  max-width: 420px;
+}
 </style>

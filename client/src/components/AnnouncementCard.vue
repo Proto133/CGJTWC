@@ -8,19 +8,48 @@ const formattedDate = date.formatDate(props.announcement.createdAt.toDate(), 'MM
 </script>
 
 <template>
-  <q-card flat bordered class="q-mb-md">
+  <q-card flat bordered class="announcement-card card-interactive q-mb-md">
     <q-card-section>
-      <div class="row items-start">
-        <div class="col">
-          <div class="text-h6 text-weight-bold text-primary">
-            {{ announcement.title }}
-            <q-badge v-if="announcement.pinned" color="gold" text-color="dark" class="q-ml-sm">Pinned</q-badge>
-          </div>
-          <div class="text-caption text-grey-6 q-mb-sm">{{ formattedDate }}</div>
-        </div>
+      <div class="announcement-head">
+        <h3 class="announcement-title">{{ announcement.title }}</h3>
+        <span v-if="announcement.pinned" class="pinned-badge">Pinned</span>
       </div>
-
-      <div class="text-body1" style="white-space: pre-wrap">{{ announcement.body }}</div>
+      <div class="announcement-date">{{ formattedDate }}</div>
+      <div class="announcement-body">{{ announcement.body }}</div>
     </q-card-section>
   </q-card>
 </template>
+
+<style scoped>
+.announcement-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.announcement-title {
+  font-size: 1.3rem;
+  line-height: 1.15;
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.announcement-date {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--grey-400);
+  margin-top: 6px;
+}
+
+.announcement-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin-top: 12px;
+  line-height: 1.65;
+  color: var(--grey-600);
+}
+</style>

@@ -10,9 +10,13 @@ onUnmounted(() => store.unsubscribeFromAnnouncements())
 </script>
 
 <template>
-  <q-page padding>
-    <div style="max-width: 800px; margin: 0 auto;">
-      <h1 class="section-title q-mb-lg">Announcements</h1>
+  <q-page>
+    <div class="page-shell page-shell--mid">
+      <header class="page-header">
+        <div class="eyebrow">Team News</div>
+        <h1 class="page-title">Announcements</h1>
+        <p class="lead">Updates from the coaching staff for wrestlers and families.</p>
+      </header>
 
       <div v-if="store.loading" class="text-center q-pa-xl">
         <q-spinner color="primary" size="lg" />
@@ -20,26 +24,26 @@ onUnmounted(() => store.unsubscribeFromAnnouncements())
 
       <template v-else>
         <!-- Pinned -->
-        <div v-if="store.pinnedAnnouncements().length">
-          <h6 class="text-primary q-mb-sm">Pinned</h6>
+        <section v-if="store.pinnedAnnouncements().length">
+          <div class="subsection-title q-mb-sm">Pinned</div>
           <AnnouncementCard
             v-for="a in store.pinnedAnnouncements()"
             :key="a.id"
             :announcement="a"
           />
-        </div>
+        </section>
 
         <!-- Regular -->
-        <div v-if="store.regularAnnouncements().length" class="q-mt-md">
-          <h6 class="text-primary q-mb-sm">Recent</h6>
+        <section v-if="store.regularAnnouncements().length" class="q-mt-lg">
+          <div class="subsection-title q-mb-sm">Recent</div>
           <AnnouncementCard
             v-for="a in store.regularAnnouncements()"
             :key="a.id"
             :announcement="a"
           />
-        </div>
+        </section>
 
-        <div v-if="store.announcements.length === 0" class="text-grey-6">
+        <div v-if="store.announcements.length === 0" class="empty-state">
           No announcements have been published yet.
         </div>
       </template>
