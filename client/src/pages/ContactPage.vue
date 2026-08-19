@@ -1,14 +1,13 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { Notify } from 'quasar'
-import {
-  organization,
-  socialLinks,
-  mailtoHref,
-  addressLines,
-} from 'src/config/organization'
+import { useSettingsStore } from 'stores/settings'
 
-const org = organization
+const settings = useSettingsStore()
+const org = computed(() => settings.org)
+const socialLinks = computed(() => settings.socialLinks)
+const mailtoHref = computed(() => settings.mailtoHref)
+const addressLines = computed(() => settings.addressLines)
 
 const form = ref({
   name: '',

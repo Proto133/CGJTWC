@@ -1,20 +1,23 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import {
-  organization,
-  socialLinks,
-  mailtoHref,
-  copyrightLine,
-} from 'src/config/organization'
+import { useSettingsStore } from 'stores/settings'
 
 const route = useRoute()
+const settings = useSettingsStore()
 const leftDrawerOpen = ref(false)
-const org = organization
 
+const org = computed(() => settings.org)
+const socialLinks = computed(() => settings.socialLinks)
+const mailtoHref = computed(() => settings.mailtoHref)
+const copyright = computed(() => settings.copyrightLine)
+
+// Register is deliberately not a nav link: a seventh item crowds the toolbar.
+// It gets a prominent button instead.
 const navLinks = [
   { label: 'Home', to: '/', icon: 'home' },
   { label: 'About', to: '/about', icon: 'info' },
+  { label: 'Staff', to: '/staff', icon: 'groups' },
   { label: 'Schedule', to: '/schedule', icon: 'event' },
   { label: 'Announcements', to: '/announcements', icon: 'campaign' },
   { label: 'Contact', to: '/contact', icon: 'mail' },
@@ -68,13 +71,24 @@ function isActive(to: string) {
           </router-link>
 
           <q-btn
-            to="/admin"
+            to="/register"
             unelevated
             no-caps
-            class="admin-btn q-ml-sm"
-            label="Admin"
-            icon="admin_panel_settings"
+            class="register-btn q-ml-sm"
+            label="Register"
           />
+
+          <q-btn
+            to="/admin"
+            flat
+            round
+            dense
+            class="admin-icon-btn q-ml-xs"
+            icon="admin_panel_settings"
+            aria-label="Admin"
+          >
+            <q-tooltip>Admin</q-tooltip>
+          </q-btn>
         </nav>
 
         <!-- Mobile hamburger -->
@@ -126,6 +140,19 @@ function isActive(to: string) {
         </q-item>
 
         <q-separator class="q-my-sm" />
+
+        <q-item
+          to="/register"
+          clickable
+          v-ripple
+          class="drawer-item drawer-item--cta"
+          @click="leftDrawerOpen = false"
+        >
+          <q-item-section avatar>
+            <q-icon name="how_to_reg" />
+          </q-item-section>
+          <q-item-section>Register a Wrestler</q-item-section>
+        </q-item>
 
         <q-item
           to="/admin"
@@ -194,7 +221,7 @@ function isActive(to: string) {
       </div>
 
       <div class="page-shell footer-legal">
-        {{ copyrightLine() }}
+        {{ copyright }}
       </div>
     </footer>
   </q-layout>
@@ -296,17 +323,33 @@ function isActive(to: string) {
   border-radius: 2px;
 }
 
-.admin-btn {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+.register-btn {
+  background: #fff;
+  color: var(--navy-800);
   border-radius: 8px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.04em;
   min-height: 44px;
+  padding: 0 16px;
 }
 
-.admin-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
+.register-btn:hover {
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.admin-icon-btn {
+  color: rgba(255, 255, 255, 0.7);
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.admin-icon-btn:hover {
+  color: #fff;
+}
+
+.drawer-item--cta {
+  color: var(--navy-800);
+  font-weight: 600;
 }
 
 /* Drawer ------------------------------------------------------------ */

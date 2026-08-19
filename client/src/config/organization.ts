@@ -1,9 +1,17 @@
 // =============================================================================
-// ORGANIZATION DATA — SINGLE SOURCE OF TRUTH
+// ORGANIZATION DATA — DEFAULTS
 // =============================================================================
-// Everything about the club that appears on the site lives here. Edit this
-// file, commit, and every page updates. You should not need to touch any
-// component to change a name, email, social account, venue or blurb.
+// Everything about the club that appears on the site starts here. Edit this
+// file, commit, and every page updates.
+//
+// Admins can also override these values from the dashboard, which writes to the
+// Firestore document `settings/organization`. Precedence is:
+//
+//     Firestore override  >  this file
+//
+// A blank or missing override falls back to the value below, and "Reset to
+// defaults" in the admin UI deletes the override document entirely. So this file
+// remains both the seed and the safety net.
 //
 // Social accounts accept either a handle or a full URL:
 //     x: 'CGJTWrestling'                      -> https://x.com/CGJTWrestling
@@ -12,35 +20,91 @@
 // Leave a social account as an empty string to hide it everywhere.
 // =============================================================================
 
-export const organization = {
-  /** Names and taglines. */
+export interface OrganizationIdentity {
+  /** Full display name. Used in the footer, page titles and copyright. */
+  name: string
+  /** Short form for tight spaces such as the admin header. */
+  shortName: string
+  /** The header/footer lockup renders these on two lines. */
+  brandLine1: string
+  brandLine2: string
+  /** Large hero headline, also rendered on two lines. */
+  heroLine1: string
+  heroLine2: string
+  /** Short phrase under the hero headline. */
+  heroTagline: string
+  /** Short phrase beside the footer logo. */
+  footerTagline: string
+}
+
+export interface OrganizationContact {
+  email: string
+  /** Optional. Leave empty to hide the phone row on the contact page. */
+  phone: string
+}
+
+export interface OrganizationLocation {
+  /** One line per venue. Add or remove freely. */
+  venues: string[]
+  city: string
+  state: string
+}
+
+export interface OrganizationSocial {
+  x: string
+  facebook: string
+  instagram: string
+}
+
+export interface OrganizationProgram {
+  grades: string
+  skillLevels: string
+  seasonMonths: string
+}
+
+export interface OrganizationContent {
+  /** Short teaser used in the About section on the home page. */
+  aboutTeaser: string
+  /** Longer intro at the top of the About page. */
+  aboutIntro: string
+  /** Bullet list on the About page. */
+  offerings: string[]
+  /** Values paragraph on the About page. */
+  values: string
+  /** Home page closing call to action. */
+  ctaHeading: string
+  ctaText: string
+  /** Intro line on the contact page. */
+  contactIntro: string
+}
+
+export interface OrganizationSettings {
+  identity: OrganizationIdentity
+  contact: OrganizationContact
+  location: OrganizationLocation
+  social: OrganizationSocial
+  program: OrganizationProgram
+  content: OrganizationContent
+}
+
+export const defaultOrganization: OrganizationSettings = {
   identity: {
-    /** Full legal/display name. Used in the footer, page titles and copyright. */
     name: 'Trojans Wrestling Club',
-    /** Short form for tight spaces such as the admin header. */
     shortName: 'Trojans',
-    /** The header/footer lockup renders these on two lines. */
     brandLine1: 'Trojans',
     brandLine2: 'Wrestling Club',
-    /** Large hero headline, also rendered on two lines. */
     heroLine1: 'Trojans',
     heroLine2: 'Wrestling Club',
-    /** Short phrase under the hero headline. */
     heroTagline: 'Building strength, discipline and champions.',
-    /** Short phrase beside the footer logo. */
     footerTagline: 'Building champions on and off the mat',
   },
 
-  /** How people reach the club. */
   contact: {
     email: 'admin@trojanswrestlingclub.com',
-    /** Optional. Leave empty to hide the phone row on the contact page. */
     phone: '',
   },
 
-  /** Where the club practises and competes. */
   location: {
-    /** One line per venue. Add or remove freely. */
     venues: [
       'Cary Grove Community Center',
       'District 26 Schools',
@@ -49,69 +113,61 @@ export const organization = {
     state: 'IL',
   },
 
-  /**
-   * Social accounts. Handle or full URL; empty string hides the link.
-   * Only these keys are supported — add a new one to SOCIAL_PLATFORMS below.
-   */
   social: {
     x: 'CGJTWrestling',
     facebook: '',
     instagram: '',
   },
 
-  /** Program facts shown as tiles on the About page. */
   program: {
     grades: 'K–8',
     skillLevels: 'All',
     seasonMonths: 'Nov–Feb',
   },
 
-  /** Editable body copy. */
   content: {
-    /** Short teaser used in the About section on the home page. */
     aboutTeaser:
       'The Trojans Wrestling Club develops young athletes in the Cary Grove community ' +
       'through hard work, sportsmanship and a love for the sport. We welcome wrestlers ' +
       'of all experience levels.',
-    /** Longer intro at the top of the About page. */
     aboutIntro:
       'The Trojans Wrestling Club serves young athletes in the Cary Grove area. Our ' +
       'mission is to teach the fundamentals of wrestling while instilling discipline, ' +
       'respect, hard work and teamwork.',
-    /** Bullet list on the About page. */
     offerings: [
       'Age-appropriate training for elementary and middle school wrestlers',
       'Experienced volunteer coaches focused on safety and development',
       'Participation in local dual meets and tournaments',
       'A positive, supportive environment for beginners and experienced wrestlers alike',
     ],
-    /** Values paragraph on the About page. */
     values:
       'Every wrestler matters. We emphasize effort over outcome and personal growth ' +
       'over trophies. Parents and families are an essential part of our team.',
-    /** Home page closing call to action. */
     ctaHeading: 'Ready to wrestle?',
     ctaText: 'New wrestlers and families are always welcome.',
-    /** Intro line on the contact page. */
     contactIntro:
       'Questions about the program, registration or volunteering? Reach out anytime.',
   },
-} as const
+}
 
 // =============================================================================
 // Below this line is wiring, not configuration. You should rarely need to edit
 // it — only when adding support for a brand-new social platform.
+//
+// These are pure functions rather than precomputed constants, because live
+// values can change at runtime when an admin edits the settings. The settings
+// store calls them inside computed properties.
 // =============================================================================
 
 interface SocialPlatform {
   label: string
   baseUrl: string
-  /** 24x24 viewBox path. Brand marks are inlined because the icon sets bundled
-   *  with this project (material-icons) contain no brand glyphs. */
+  /** 24x24 viewBox path. Brand marks are inlined because the icon set bundled
+   *  with this project (material-icons) contains no brand glyphs. */
   svgPath: string
 }
 
-const SOCIAL_PLATFORMS: Record<keyof typeof organization.social, SocialPlatform> = {
+const SOCIAL_PLATFORMS: Record<keyof OrganizationSocial, SocialPlatform> = {
   x: {
     label: 'X',
     baseUrl: 'https://x.com/',
@@ -158,48 +214,61 @@ export interface SocialLink {
   svgPath: string
 }
 
+/** Strips a leading @ or a full URL prefix, leaving the bare handle. */
+function bareHandle(value: string): string {
+  return value.trim().replace(/^https?:\/\/[^/]+\//i, '').replace(/^@/, '')
+}
+
 /**
  * Social accounts that have been filled in, ready to render.
  * Accepts a bare handle, an @handle, or a full URL.
  */
-export const socialLinks: SocialLink[] = Object.entries(organization.social)
-  .filter(([, value]) => value.trim() !== '')
-  .map(([key, value]) => {
-    const platform = SOCIAL_PLATFORMS[key as keyof typeof organization.social]
-    const raw = value.trim()
-    const isUrl = /^https?:\/\//i.test(raw)
-    const handle = raw.replace(/^https?:\/\/[^/]+\//i, '').replace(/^@/, '')
+export function buildSocialLinks(social: OrganizationSocial): SocialLink[] {
+  return (Object.keys(SOCIAL_PLATFORMS) as (keyof OrganizationSocial)[])
+    .filter((key) => (social[key] ?? '').trim() !== '')
+    .map((key) => {
+      const platform = SOCIAL_PLATFORMS[key]
+      const raw = social[key].trim()
+      const isUrl = /^https?:\/\//i.test(raw)
+      const handle = bareHandle(raw)
 
-    return {
-      key,
-      label: platform.label,
-      handle: `@${handle}`,
-      url: isUrl ? raw : `${platform.baseUrl}${handle}`,
-      svgPath: platform.svgPath,
-    }
-  })
-
-/** The X entry, or null when no X account is configured. */
-export const xSocial: SocialLink | null =
-  socialLinks.find((link) => link.key === 'x') ?? null
-
-/** The X/Twitter handle without the @, for the embedded timeline widget. */
-export const xHandle: string = organization.social.x.trim()
-  .replace(/^https?:\/\/[^/]+\//i, '')
-  .replace(/^@/, '')
-
-/** `mailto:` href for the club address. */
-export const mailtoHref = `mailto:${organization.contact.email}`
-
-/** "Cary, IL" */
-export const cityState = `${organization.location.city}, ${organization.location.state}`
-
-/** Venue lines followed by the city/state, for address blocks. */
-export const addressLines: string[] = [...organization.location.venues, cityState]
-
-/** "© 2026 Trojans Wrestling Club · Cary, IL" */
-export function copyrightLine(year: number = new Date().getFullYear()): string {
-  return `© ${year} ${organization.identity.name} · ${cityState}`
+      return {
+        key,
+        label: platform.label,
+        handle: `@${handle}`,
+        url: isUrl ? raw : `${platform.baseUrl}${handle}`,
+        svgPath: platform.svgPath,
+      }
+    })
 }
 
-export default organization
+/** The X handle without the @, for the embedded timeline widget. */
+export function buildXHandle(social: OrganizationSocial): string {
+  return bareHandle(social.x ?? '')
+}
+
+/** "Cary, IL" */
+export function buildCityState(location: OrganizationLocation): string {
+  return [location.city, location.state].filter(Boolean).join(', ')
+}
+
+/** Venue lines followed by the city/state, for address blocks. */
+export function buildAddressLines(location: OrganizationLocation): string[] {
+  return [...location.venues.filter(Boolean), buildCityState(location)].filter(Boolean)
+}
+
+/** `mailto:` href for the club address. */
+export function buildMailtoHref(email: string): string {
+  return `mailto:${email}`
+}
+
+/** "© 2026 Trojans Wrestling Club · Cary, IL" */
+export function buildCopyrightLine(
+  name: string,
+  cityState: string,
+  year: number = new Date().getFullYear(),
+): string {
+  return [`© ${year} ${name}`, cityState].filter(Boolean).join(' · ')
+}
+
+export default defaultOrganization

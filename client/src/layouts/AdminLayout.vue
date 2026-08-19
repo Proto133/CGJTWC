@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useAuthStore } from 'stores/auth'
 import { useRouter } from 'vue-router'
-import { organization } from 'src/config/organization'
+import { useSettingsStore } from 'stores/settings'
 
-const org = organization
+const settings = useSettingsStore()
+const org = computed(() => settings.org)
 const authStore = useAuthStore()
 const router = useRouter()
 

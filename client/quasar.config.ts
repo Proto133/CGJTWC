@@ -2,7 +2,7 @@
 // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file
 
 import { configure } from 'quasar/wrappers'
-import { organization } from './src/config/organization'
+import { defaultOrganization } from './src/config/organization'
 
 export default configure(() => {
   return {
@@ -11,12 +11,12 @@ export default configure(() => {
       errors: true,
     },
 
-    // Feeds index.html's <%= productName %> / <%= productDescription %> so the
-    // browser tab title also comes from src/config/organization.ts rather than
-    // package.json.
+    // Feeds index.html's <%= productName %> / <%= productDescription %>. This is
+    // build-time, so it provides the pre-hydration default only; App.vue then
+    // sets the live title via useMeta once admin overrides have loaded.
     htmlVariables: {
-      productName: organization.identity.name,
-      productDescription: organization.identity.heroTagline,
+      productName: defaultOrganization.identity.name,
+      productDescription: defaultOrganization.identity.heroTagline,
     },
 
     // https://v2.quasar.dev/quasar-cli-vite/prefetch-feature
@@ -83,6 +83,8 @@ export default configure(() => {
         'Notify',
         'Dialog',
         'Loading',
+        // Required by useMeta(), used in App.vue for the live document title.
+        'Meta',
       ],
     },
 

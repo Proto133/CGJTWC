@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { organization, cityState } from 'src/config/organization'
+import { computed } from 'vue'
+import { useSettingsStore } from 'stores/settings'
 
-const org = organization
+const settings = useSettingsStore()
+const org = computed(() => settings.org)
+const cityState = computed(() => settings.cityState)
 </script>
 
 <template>

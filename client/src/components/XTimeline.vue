@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { xHandle, xSocial } from 'src/config/organization'
+import { onMounted, ref, computed } from 'vue'
+import { useSettingsStore } from 'stores/settings'
 
 type Twttr = { widgets: { load: (el?: HTMLElement) => void } }
 
@@ -9,10 +9,12 @@ const props = defineProps<{
   limit?: number
 }>()
 
-// Falls back to the account configured in src/config/organization.ts.
-const handle = props.handle || xHandle
+const settings = useSettingsStore()
+
+// Falls back to the configured account, which an admin can change at runtime.
+const handle = computed(() => props.handle || settings.xHandle)
 const limit = props.limit || 4
-const brandIcon = xSocial?.svgPath ?? ''
+const brandIcon = computed(() => settings.xSocial?.svgPath ?? '')
 const loaded = ref(false)
 const container = ref<HTMLElement | null>(null)
 

@@ -5,9 +5,10 @@ import { useAnnouncementsStore } from 'stores/announcements'
 import EventCard from 'components/EventCard.vue'
 import AnnouncementCard from 'components/AnnouncementCard.vue'
 import XTimeline from 'components/XTimeline.vue'
-import { organization } from 'src/config/organization'
+import { useSettingsStore } from 'stores/settings'
 
-const org = organization
+const settings = useSettingsStore()
+const org = computed(() => settings.org)
 const eventsStore = useEventsStore()
 const announcementsStore = useAnnouncementsStore()
 
@@ -41,8 +42,8 @@ onUnmounted(() => {
 
         <div class="hero__actions">
           <q-btn
-            to="/schedule"
-            label="View Schedule"
+            to="/register"
+            label="Register a Wrestler"
             color="white"
             text-color="primary"
             unelevated
@@ -51,8 +52,8 @@ onUnmounted(() => {
             class="hero__btn"
           />
           <q-btn
-            to="/contact"
-            label="Join the Team"
+            to="/schedule"
+            label="View Schedule"
             outline
             color="white"
             no-caps
@@ -141,15 +142,25 @@ onUnmounted(() => {
       <section class="section cta">
         <h2 class="cta__title">{{ org.content.ctaHeading }}</h2>
         <p class="cta__text">{{ org.content.ctaText }}</p>
-        <q-btn
-          to="/contact"
-          label="Contact Us"
-          color="white"
-          text-color="primary"
-          unelevated
-          no-caps
-          size="lg"
-        />
+        <div class="cta__actions">
+          <q-btn
+            to="/register"
+            label="Register Now"
+            color="white"
+            text-color="primary"
+            unelevated
+            no-caps
+            size="lg"
+          />
+          <q-btn
+            to="/contact"
+            label="Contact Us"
+            outline
+            color="white"
+            no-caps
+            size="lg"
+          />
+        </div>
       </section>
     </div>
   </q-page>
@@ -245,5 +256,12 @@ onUnmounted(() => {
 .cta__text {
   color: rgba(255, 255, 255, 0.78);
   margin: 0.6rem 0 1.4rem;
+}
+
+.cta__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
 }
 </style>
