@@ -33,13 +33,17 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          # Must match the Node/npm that generated package-lock.json. npm 10
-          # (bundled with Node 22) computes a different optional-dependency tree
-          # than npm 11 and fails `npm ci` with "Missing: @emnapi/core from lock
-          # file", even though the lock is current. Node 24 ships npm 11.
           node-version: 24
           cache: npm
           cache-dependency-path: client/package-lock.json
+
+      - name: Pin npm to the lockfile's generator
+        # npm ci fails with "Missing: @emnapi/core@1.11.3 from lock file" on other
+        # npm versions. The lock is not stale — regenerating it locally produces
+        # a byte-identical file — but npm 11.6.1 omits two optional transitive
+        # deps of @napi-rs/wasm-runtime that both older and newer npm expect.
+        # Pinning the resolver that wrote the lock keeps `npm ci` reproducible.
+        run: npm i -g npm@11.6.1
 
       - name: Install dependencies
         run: npm ci
