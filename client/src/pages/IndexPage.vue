@@ -6,7 +6,9 @@ import EventCard from 'components/EventCard.vue'
 import AnnouncementCard from 'components/AnnouncementCard.vue'
 import XTimeline from 'components/XTimeline.vue'
 import { useSettingsStore } from 'stores/settings'
+import { assetUrl } from 'src/utils/assets'
 
+const watermarkUrl = assetUrl('assets/JTWC-white-512.png')
 const settings = useSettingsStore()
 const org = computed(() => settings.org)
 const eventsStore = useEventsStore()
@@ -31,7 +33,7 @@ onUnmounted(() => {
     <!-- Hero -->
     <section class="hero">
       <!-- Decorative watermark; hidden from assistive tech. -->
-      <img src="/assets/JTWC-white-512.png" alt="" class="hero__watermark" aria-hidden="true" />
+      <img :src="watermarkUrl" alt="" class="hero__watermark" aria-hidden="true" />
 
       <div class="page-shell hero__inner">
         <div class="hero__eyebrow">{{ org.location.city }}, {{ org.location.state }}</div>

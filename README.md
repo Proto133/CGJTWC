@@ -210,6 +210,54 @@ redeploy or restart is needed.
 - Creating an access request grants **no** privileges by itself
 - Everything else is denied by a catch-all rule
 
+### 7c. Preview Deploy on GitHub Pages (temporary)
+
+A GitHub Actions workflow at `.github/workflows/deploy-pages.yml` builds the app
+and publishes it to GitHub Pages on every push to `main`. This is a temporary
+preview host for showing work in progress; the intended long-term target is
+Firebase Hosting or Vercel.
+
+**One-time setup**
+
+1. Repository **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+   If Pages is set to "Deploy from a branch" it serves the repo root, which is
+   why it renders the README instead of the site.
+2. Repository **Settings → Secrets and variables → Actions**, add the six values
+   from `client/.env`:
+   `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`,
+   `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`,
+   `VITE_FIREBASE_APP_ID`.
+   These are client-side identifiers that ship in any browser bundle, so they are
+   not sensitive — but `client/.env` is gitignored, so the build cannot see them
+   otherwise.
+3. Firebase Console → **Authentication → Settings → Authorized domains**, add
+   `proto133.github.io`. Without it, admin sign-in on the Pages site fails with
+   `auth/unauthorized-domain`. Public pages work regardless.
+
+The site is then served at `https://proto133.github.io/CGJTWC/`.
+
+**How the subpath is handled**
+
+Pages serves from `/CGJTWC/` rather than the domain root, which breaks two things
+by default. Both are handled without hardcoding anything:
+
+- Asset paths. The workflow sets `PAGES_BASE=/CGJTWC/`, which feeds
+  `build.publicPath` in `quasar.config.ts`. Local builds and any root-served host
+  are unaffected because the variable defaults to `/`. Public files referenced
+  from components go through `assetUrl()` in `client/src/utils/assets.ts`, which
+  prefixes `import.meta.env.BASE_URL`.
+- Deep links. Pages has no SPA rewrite, so `/CGJTWC/staff` would 404 on refresh.
+  The workflow copies `index.html` to `404.html`, which Pages serves for unknown
+  paths, letting the router take over while keeping clean URLs.
+
+**Note:** publishing makes the public registration form reachable by anyone with
+the URL, writing into the live Firestore project. The rules make that collection
+write-only for the public, but real submissions will land in the admin inbox.
+
+**Moving to Vercel or Firebase Hosting later:** nothing in the source assumes the
+subpath. Build without `PAGES_BASE` and deploy `client/dist/spa`, with an SPA
+rewrite to `index.html`.
+
 ### 8. (Optional but Recommended) Set Up Firebase Hosting
 
 ```bash

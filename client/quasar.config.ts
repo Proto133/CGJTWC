@@ -41,6 +41,13 @@ export default configure(() => {
 
     // Full list of options: https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#build
     build: {
+      // GitHub Pages serves this project from https://<user>.github.io/CGJTWC/,
+      // so assets need that prefix. It is opt-in via an env var rather than
+      // hardcoded, because every other target (Firebase Hosting, Vercel, local
+      // preview) serves from the domain root and would break with a prefix.
+      //   PAGES_BASE=/CGJTWC/ quasar build
+      publicPath: process.env.PAGES_BASE || '/',
+
       target: {
         browser: ['es2022', 'firefox115', 'chrome115', 'safari14'],
         node: 'node20',

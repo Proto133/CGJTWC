@@ -1,0 +1,90 @@
+name: Deploy to GitHub Pages
+
+# Temporary preview host so work in progress can be shown. The build is
+# deliberately portable: the /CGJTWC/ base path is injected here rather than
+# committed to quasar.config.ts, so moving to Vercel or Firebase Hosting later
+# needs no source changes.
+
+on:
+  push:
+    branches: [main]
+  # Allows a manual run from the Actions tab.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never run two deploys at once; cancel superseded ones.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx vue-tsc --noEmit -p tsconfig.json
+
+      - name: Lint
+        run: npx eslint -c ./eslint.config.js "./src/**/*.{ts,js,vue}"
+
+      - name: Build
+        env:
+          # Repo is served from /CGJTWC/ on Pages.
+          PAGES_BASE: /CGJTWC/
+          # Firebase web config. These are client-side identifiers that ship in
+          # any browser bundle, but they still have to reach the build, and
+          # client/.env is gitignored. Set them as repository secrets.
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+        run: npx quasar build
+
+      - name: Add SPA fallback
+        # GitHub Pages has no rewrite rule, so a deep link such as
+        # /CGJTWC/staff would 404 on refresh. Pages serves 404.html for unknown
+        # paths, so an identical copy of index.html lets the SPA router take over
+        # and keeps clean (non-hash) URLs.
+        run: cp dist/spa/index.html dist/spa/404.html
+
+      - name: Disable Jekyll
+        # Without this, Pages ignores files and folders beginning with an
+        # underscore, which Vite can emit.
+        run: touch dist/spa/.nojekyll
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: client/dist/spa
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
