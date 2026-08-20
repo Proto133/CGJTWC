@@ -33,7 +33,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # Must match the Node/npm that generated package-lock.json. npm 10
+          # (bundled with Node 22) computes a different optional-dependency tree
+          # than npm 11 and fails `npm ci` with "Missing: @emnapi/core from lock
+          # file", even though the lock is current. Node 24 ships npm 11.
+          node-version: 24
           cache: npm
           cache-dependency-path: client/package-lock.json
 
