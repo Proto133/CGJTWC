@@ -28,9 +28,12 @@ export interface AdminDoc {
   addedAt?: Timestamp
 }
 
-// Written to /accessRequests/{uid} when someone signs up. Document ID is the
-// Firebase Auth UID, so approving = copying that ID into /admins/{uid}.
+// Written to /accessRequests/{uid} when someone signs up. The document ID is
+// the Firebase Auth UID, which is what makes approval possible: granting access
+// means creating /admins/{sameId}.
 export interface AccessRequest {
+  /** Also the requester's Firebase Auth UID. */
+  id: string
   firstName: string
   lastName: string
   email: string

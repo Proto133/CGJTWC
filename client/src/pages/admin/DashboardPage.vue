@@ -4,12 +4,14 @@ import { useEventsStore } from 'stores/events'
 import { useAnnouncementsStore } from 'stores/announcements'
 import { useStaffStore } from 'stores/staff'
 import { useRegistrationsStore } from 'stores/registrations'
+import { useAccessRequestsStore } from 'stores/accessRequests'
 import { useAuthStore } from 'stores/auth'
 import EventForm from 'components/admin/EventForm.vue'
 import AnnouncementForm from 'components/admin/AnnouncementForm.vue'
 import StaffForm from 'components/admin/StaffForm.vue'
 import SettingsForm from 'components/admin/SettingsForm.vue'
 import RegistrationsInbox from 'components/admin/RegistrationsInbox.vue'
+import AccessRequestsInbox from 'components/admin/AccessRequestsInbox.vue'
 import type {
   Event,
   Announcement,
@@ -20,7 +22,13 @@ import type {
 } from 'src/types'
 import { Dialog } from 'quasar'
 
-type Tab = 'events' | 'announcements' | 'staff' | 'registrations' | 'settings'
+type Tab =
+  | 'events'
+  | 'announcements'
+  | 'staff'
+  | 'registrations'
+  | 'access'
+  | 'settings'
 
 const tab = ref<Tab>('events')
 
@@ -28,6 +36,7 @@ const eventsStore = useEventsStore()
 const announcementsStore = useAnnouncementsStore()
 const staffStore = useStaffStore()
 const registrationsStore = useRegistrationsStore()
+const accessRequestsStore = useAccessRequestsStore()
 const authStore = useAuthStore()
 
 // Form state
@@ -42,8 +51,9 @@ onMounted(() => {
   eventsStore.subscribe()
   announcementsStore.subscribe()
   staffStore.subscribe()
-  // Admin-only: rules deny this read to everyone else.
+  // Admin-only: rules deny these reads to everyone else.
   registrationsStore.subscribe()
+  accessRequestsStore.subscribe()
 })
 
 onUnmounted(() => {
@@ -51,6 +61,7 @@ onUnmounted(() => {
   announcementsStore.unsubscribeFromAnnouncements()
   staffStore.unsubscribeFromStaff()
   registrationsStore.unsubscribeFromRegistrations()
+  accessRequestsStore.unsubscribeFromAccessRequests()
 })
 
 // ----- Events -----
@@ -189,6 +200,17 @@ function confirmDeleteStaff(member: StaffMember) {
           class="q-ml-sm"
         >
           {{ registrationsStore.registrations.length }}
+        </q-badge>
+      </q-tab>
+      <q-tab name="access" icon="key">
+        <span class="q-ml-sm">Access</span>
+        <q-badge
+          v-if="accessRequestsStore.requests.length"
+          color="warning"
+          text-color="dark"
+          class="q-ml-sm"
+        >
+          {{ accessRequestsStore.requests.length }}
         </q-badge>
       </q-tab>
       <q-tab name="settings" label="Settings" icon="settings" />
@@ -394,6 +416,11 @@ function confirmDeleteStaff(member: StaffMember) {
       <!-- REGISTRATIONS -->
       <q-tab-panel name="registrations" class="q-px-none">
         <RegistrationsInbox />
+      </q-tab-panel>
+
+      <!-- ACCESS REQUESTS -->
+      <q-tab-panel name="access" class="q-px-none">
+        <AccessRequestsInbox />
       </q-tab-panel>
 
       <!-- SETTINGS -->
