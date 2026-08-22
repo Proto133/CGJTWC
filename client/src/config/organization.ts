@@ -57,14 +57,13 @@ export interface OrganizationSocial {
   /**
    * Specific post URLs to embed, newest first.
    *
-   * The profile-timeline embed and the single-post embed use different
-   * pipelines at X. For this account the timeline pipeline returns HTTP 200
-   * with an empty result set, while single posts render fine, so these are the
-   * only reliable way to show anything.
+   * Now a manual override rather than the main path: posts fetched through the
+   * API take priority, and these only render when the fetch job has not
+   * populated social/xFeed. Useful for pinning something before the first run.
    *
-   * Caveat: an empty array from the admin form falls back to the defaults
-   * below, because mergeSection treats an empty array as "not set". To show no
-   * posts at all, clear the list here rather than in the dashboard.
+   * Keep the default empty. mergeSection treats an empty array as "not set",
+   * so a non-empty default cannot be cleared from the dashboard — clearing the
+   * list there would silently fall back to whatever is listed here.
    */
   featuredPosts: string[]
 }
@@ -159,11 +158,9 @@ export const defaultOrganization: OrganizationSettings = {
     x: 'CaryTrojansWC',
     facebook: '',
     instagram: '',
-    // Newest first. Admins can manage this list from the dashboard; it is
-    // seeded here so the home page shows a post before anyone edits settings.
-    featuredPosts: [
-      'https://x.com/CaryTrojansWC/status/2091008347096912231',
-    ],
+    // Deliberately empty; manage this list from the dashboard. See the note on
+    // OrganizationSocial.featuredPosts for why a non-empty default is a trap.
+    featuredPosts: [],
   },
 
   program: {
