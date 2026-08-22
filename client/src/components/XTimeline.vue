@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, computed } from 'vue'
-import { useSettingsStore } from 'stores/settings'
+import { useSettingsStore } from '../stores/settings'
 
 type Twttr = { widgets: { load: (el?: HTMLElement) => void } }
 
@@ -24,10 +24,12 @@ const featuredPosts = computed(() =>
 
 const hasFeatured = computed(() => featuredPosts.value.length > 0)
 const loaded = ref(false)
+/** True when X did not actually render a timeline, so we show a link inste
 /** True when X did not actually render a timeline, so we show a link instead. */
 const unavailable = ref(false)
 const container = ref<HTMLElement | null>(null)
-let checkTimer: ReturnType<typeof setTimeout> | null = null
+let checkTimer: ReturnType<typeof setInterval> | null = null
+let checkDeadline = 0
 
 /**
  * X's publish tool now hands out platform.x.com rather than the older
@@ -35,8 +37,17 @@ let checkTimer: ReturnType<typeof setTimeout> | null = null
  * documented host removes one variable when embeds misbehave.
  */
 const SCRIPT_SRC = 'https://platform.x.com/widgets.js'
-/** Generous: the widget does script load, iframe insert, then a data fetch. */
-const RENDER_GRACE_MS = 6000
+/** How often to re-measure while waiting for the widget to paint. */
+const RENDER_POLL_MS = 1000
+/** Total time to keep waiting before falling back to a plain link. */
+const RENDER_TIMEOUT_MS = 15000
+/** Below this the iframe is present but empty rather than genuinely rendered. */
+const MIN_RENDERED_HEIGHT = 40
+
+function stopChecking() {
+  if (checkTimer) clearInterval(checkTimer)
+  checkTimer = null
+}
 
 /**
  * X frequently answers the syndication endpoint with 429 for embeds. When that
@@ -44,17 +55,35 @@ const RENDER_GRACE_MS = 6000
  * an empty bordered box on the page. Height is therefore the only reliable
  * signal of success — the script reports nothing and the iframe is cross-origin,
  * so neither load events nor its contents can be inspected.
+ *
+ * Polled rather than measured once: the widget can take a while to paint, and a
+ * single early measurement would latch `unavailable` and hide a timeline that
+ * was merely slow.
  */
 function checkRendered() {
   // Featured posts render as their own iframes, so the timeline check does not
   // apply and the fallback link is unnecessary.
   if (hasFeatured.value) {
     unavailable.value = false
+    stopChecking()
     return
   }
+
   const iframe = container.value?.querySelector('iframe')
   const height = iframe?.getBoundingClientRect().height ?? 0
-  unavailable.value = height < 40
+
+  if (height >= MIN_RENDERED_HEIGHT) {
+    // Rendered after all; make sure any earlier fallback is retracted.
+    unavailable.value = false
+    stopChecking()
+    return
+  }
+
+  // Only give up once the whole grace period has elapsed.
+  if (Date.now() >= checkDeadline) {
+    unavailable.value = true
+    stopChecking()
+  }
 }
 
 // The widget script only auto-scans the DOM the first time it loads. On any
@@ -66,8 +95,9 @@ function renderWidget() {
   twttr.widgets.load(container.value)
   loaded.value = true
 
-  if (checkTimer) clearTimeout(checkTimer)
-  checkTimer = setTimeout(checkRendered, RENDER_GRACE_MS)
+  stopChecking()
+  checkDeadline = Date.now() + RENDER_TIMEOUT_MS
+  checkTimer = setInterval(checkRendered, RENDER_POLL_MS)
 }
 
 function loadXScript() {
@@ -95,7 +125,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  if (checkTimer) clearTimeout(checkTimer)
+  stopChecking()
 })
 </script>
 
