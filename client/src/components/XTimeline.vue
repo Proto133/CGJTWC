@@ -306,7 +306,9 @@ onBeforeUnmount(() => {
     <div class="row items-center q-mb-md">
       <!-- Inline brand mark: the bundled material-icons set has no brand glyphs,
            and the previous "fab fa-x-twitter" name required Font Awesome, which
-           is not installed, so nothing rendered. -->
+           is not installed, so nothing rendered.
+           An inline SVG with only a viewBox falls back to the SVG default of
+           300x150, so .x-brand must set explicit dimensions. -->
       <svg v-if="brandIcon" viewBox="0 0 24 24" class="x-brand q-mr-sm" aria-hidden="true">
         <path :d="brandIcon" fill="currentColor" />
       </svg>
@@ -429,6 +431,14 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* Without this the mark renders at the SVG default size of 300x150. */
+.x-brand {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  color: var(--navy-800, #1e293b);
+}
+
 .x-handle {
   color: var(--grey-600, #6b7280);
   text-decoration: none;
