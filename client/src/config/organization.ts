@@ -143,7 +143,7 @@ export const defaultOrganization: OrganizationSettings = {
   },
 
   social: {
-    x: 'CGJTWrestling',
+    x: 'CaryTrojansWC',
     facebook: '',
     instagram: '',
   },

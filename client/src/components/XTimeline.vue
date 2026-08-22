@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue'
+import { onMounted, onBeforeUnmount, ref, computed } from 'vue'
 import { useSettingsStore } from 'stores/settings'
 
 type Twttr = { widgets: { load: (el?: HTMLElement) => void } }
@@ -16,9 +16,27 @@ const handle = computed(() => props.handle || settings.xHandle)
 const limit = props.limit || 4
 const brandIcon = computed(() => settings.xSocial?.svgPath ?? '')
 const loaded = ref(false)
+/** True when X did not actually render a timeline, so we show a link instead. */
+const unavailable = ref(false)
 const container = ref<HTMLElement | null>(null)
+let checkTimer: ReturnType<typeof setTimeout> | null = null
 
 const SCRIPT_SRC = 'https://platform.twitter.com/widgets.js'
+/** Generous: the widget does script load, iframe insert, then a data fetch. */
+const RENDER_GRACE_MS = 6000
+
+/**
+ * X frequently answers the syndication endpoint with 429 for embeds. When that
+ * happens the script still injects an iframe, but it stays zero-height, leaving
+ * an empty bordered box on the page. Height is therefore the only reliable
+ * signal of success — the script reports nothing and the iframe is cross-origin,
+ * so neither load events nor its contents can be inspected.
+ */
+function checkRendered() {
+  const iframe = container.value?.querySelector('iframe')
+  const height = iframe?.getBoundingClientRect().height ?? 0
+  unavailable.value = height < 40
+}
 
 // The widget script only auto-scans the DOM the first time it loads. On any
 // subsequent SPA navigation the script is already cached, so we have to ask it
@@ -28,6 +46,9 @@ function renderWidget() {
   if (!twttr?.widgets || !container.value) return
   twttr.widgets.load(container.value)
   loaded.value = true
+
+  if (checkTimer) clearTimeout(checkTimer)
+  checkTimer = setTimeout(checkRendered, RENDER_GRACE_MS)
 }
 
 function loadXScript() {
@@ -53,6 +74,10 @@ function loadXScript() {
 onMounted(() => {
   loadXScript()
 })
+
+onBeforeUnmount(() => {
+  if (checkTimer) clearTimeout(checkTimer)
+})
 </script>
 
 <template>
@@ -70,19 +95,52 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Official X Embedded Timeline -->
-    <a
-      class="twitter-timeline"
-      :data-height="320"
-      :data-tweet-limit="limit"
-      :href="`https://x.com/${handle}`"
-      data-theme="light"
-    >
-      Tweets by @{{ handle }}
-    </a>
+    <!-- Official X Embedded Timeline. Hidden rather than removed when it fails,
+         because the script owns this node once it has run. -->
+    <div v-show="!unavailable">
+      <a
+        class="twitter-timeline"
+        :data-height="320"
+        :data-tweet-limit="limit"
+        :href="`https://x.com/${handle}`"
+        data-theme="light"
+      >
+        Tweets by @{{ handle }}
+      </a>
+    </div>
 
-    <div v-if="!loaded" class="text-caption text-center q-mt-sm text-grey">
+    <div v-if="!loaded && !unavailable" class="text-caption text-center q-mt-sm text-grey">
       Loading latest posts...
+    </div>
+
+    <!-- X rate-limits embeds aggressively; a plain link beats an empty box. -->
+    <div v-if="unavailable" class="x-fallback">
+      <p class="x-fallback__text">
+        Latest posts could not be loaded right now.
+      </p>
+      <q-btn
+        :href="`https://x.com/${handle}`"
+        target="_blank"
+        rel="noopener"
+        unelevated
+        no-caps
+        color="primary"
+        :label="`View @${handle} on X`"
+        icon-right="open_in_new"
+      />
     </div>
   </div>
 </template>
+
+<style scoped>
+.x-fallback {
+  text-align: center;
+  padding: 8px 0 4px;
+}
+
+.x-fallback__text {
+  margin: 0 0 12px;
+  font-size: 0.9rem;
+  color: var(--grey-500);
+}
+</style>
