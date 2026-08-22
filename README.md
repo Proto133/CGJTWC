@@ -298,10 +298,12 @@ plan), so a scheduled GitHub Action fills that role. It is free on a public
 repository.
 
 ```
-GitHub Action (every 6h)  ->  X API  ->  Firestore social/xFeed  ->  site
+                          /-> social/xFeed  -> site (immediately)
+GitHub Action -> X API --<
+  (every 6h)              \-> xMentions     -> admin approval -> site
 ```
 
-The site subscribes to that document, so a successful run appears without a
+The site subscribes to Firestore, so a successful run appears without a
 redeploy.
 
 ### Cost
@@ -332,8 +334,9 @@ tier is closed — pay-per-use with prepaid credits is the only self-serve optio
    Add it as a repository *variable* named `X_USER_ID`. Resolving a handle is a
    $0.010 user read; pinning the id skips that on every future run.
 
-Optional repository variables: `X_HANDLE` (defaults to `CaryTrojansWC`) and
-`X_MAX_POSTS` (defaults to 6, minimum 5).
+Optional repository variables: `X_HANDLE` (defaults to `CaryTrojansWC`),
+`X_MAX_POSTS` (defaults to 6, minimum 5), `X_MAX_MENTIONS` (defaults to 10) and
+`X_FETCH_MENTIONS` (set to `false` to stop fetching mentions entirely).
 
 ### Fallback order
 
@@ -352,11 +355,33 @@ Because `mergeSection` treats an empty array as "not set", clearing the featured
 list in the dashboard falls back to the defaults in `organization.ts` rather
 than showing none. Edit that file to remove the seeded post.
 
+### Mentions are moderated
+
+Anyone on X can mention the club, so mentions are treated as untrusted content
+on a site used by families. They are fetched into `xMentions` with
+`status: 'pending'` and **nothing appears publicly until an admin approves it**
+in Admin → Mentions.
+
+The quarantine is enforced by security rules, not just by the UI:
+
+- Public reads are granted only when `status == 'approved'`. An unfiltered list
+  query is rejected outright, so pending and rejected mentions cannot be read by
+  anyone but an admin.
+- Nobody in a browser can *create* a mention. The only writer is the Admin SDK
+  in the scheduled job, which bypasses rules.
+- Admins can change the status and nothing else. The text, author, media and
+  permalink are pinned to what X returned, so approved content cannot be swapped
+  for something else afterwards.
+- The job only ever creates documents it has not seen before, so a re-run never
+  resets a decision you already made back to pending.
+
+Rejecting keeps a record; deleting removes it, and it returns as pending if X
+still serves it on a later fetch.
+
 ### Things that are not possible
 
-- **Mentions.** X retired search and mention embeds; the API can fetch them, but
-  auto-publishing arbitrary strangers' content on a youth club site is a
-  moderation problem, so it is deliberately not wired up.
+- **Mention embeds.** X retired search and mention *embeds*, which is why these
+  go through the API rather than a widget.
 - **Live updates.** The embedded-timeline widget dropped live updates in 2022,
   and the scheduled job runs every six hours. Use the manual "Run workflow"
   button to refresh immediately after posting.

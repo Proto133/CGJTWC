@@ -25,6 +25,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore'
 
 const API_BASE = 'https://api.x.com/2'
 const FEED_DOC = 'social/xFeed'
+const MENTIONS_COLLECTION = 'xMentions'
 
 const bearer = required('X_BEARER_TOKEN')
 const handle = required('X_HANDLE').replace(/^@/, '')
@@ -33,6 +34,13 @@ const serviceAccountJson = required('FIREBASE_SERVICE_ACCOUNT')
 const configuredUserId = (process.env.X_USER_ID ?? '').trim()
 /** X requires between 5 and 100. */
 const maxPosts = clamp(Number(process.env.X_MAX_POSTS ?? 6), 5, 100)
+/**
+ * Mentions are written to a moderation queue rather than straight to the site:
+ * anyone on X can mention the club, and this is a youth organisation. Set
+ * X_FETCH_MENTIONS to 'false' to stop paying for them entirely.
+ */
+const fetchMentions = (process.env.X_FETCH_MENTIONS ?? 'true') !== 'false'
+const maxMentions = clamp(Number(process.env.X_MAX_MENTIONS ?? 10), 5, 100)
 
 function required(name) {
   const value = process.env[name]
@@ -151,9 +159,46 @@ function mapPosts(payload) {
   })
 }
 
-async function main() {
-  const author = await resolveAuthor()
+/**
+ * Mentions come from arbitrary accounts, so each one carries its own author
+ * rather than the club's.
+ */
+function mapMentions(payload) {
+  const usersById = new Map((payload.includes?.users ?? []).map((user) => [user.id, user]))
+  const mediaByKey = new Map(
+    (payload.includes?.media ?? []).map((item) => [item.media_key, item]),
+  )
 
+  return (payload.data ?? []).map((post) => {
+    const user = usersById.get(post.author_id)
+    const username = user?.username ?? 'i'
+
+    const media = (post.attachments?.media_keys ?? [])
+      .map((key) => mediaByKey.get(key))
+      .filter(Boolean)
+      .map((item) => ({
+        type: item.type,
+        url: item.url ?? item.preview_image_url ?? '',
+        alt: item.alt_text ?? '',
+      }))
+      .filter((item) => item.url !== '')
+
+    return {
+      id: post.id,
+      text: cleanText(post),
+      createdAt: post.created_at ?? null,
+      permalink: `https://x.com/${username}/status/${post.id}`,
+      author: {
+        name: user?.name ?? username,
+        username,
+        avatar: (user?.profile_image_url ?? '').replace('_normal', '_bigger'),
+      },
+      media,
+    }
+  })
+}
+
+async function syncOwnPosts(db, author) {
   const payload = await callX(`/users/${author.id}/tweets`, {
     max_results: maxPosts,
     // Replies are conversational noise and retweets need separate attribution
@@ -170,9 +215,6 @@ async function main() {
 
   const profile =
     payload.includes?.users?.find((user) => user.id === author.id) ?? author.profile
-
-  const app = initializeApp({ credential: cert(JSON.parse(serviceAccountJson)) })
-  const db = getFirestore(app)
   const ref = db.doc(FEED_DOC)
 
   // Skip the write when nothing changed, so the site's realtime listeners do
@@ -180,7 +222,7 @@ async function main() {
   const existing = await ref.get()
   const priorIds = (existing.data()?.posts ?? []).map((post) => post.id).join(',')
   if (existing.exists && priorIds === posts.map((post) => post.id).join(',')) {
-    console.log('No new posts; leaving Firestore untouched.')
+    console.log('No new posts; leaving the feed document untouched.')
     return
   }
 
@@ -197,6 +239,60 @@ async function main() {
   })
 
   console.log(`Wrote ${posts.length} post(s) to ${FEED_DOC}.`)
+}
+
+async function syncMentions(db, author) {
+  const payload = await callX(`/users/${author.id}/mentions`, {
+    max_results: maxMentions,
+    'tweet.fields': 'created_at,entities,attachments,author_id',
+    expansions: 'author_id,attachments.media_keys',
+    'media.fields': 'type,url,preview_image_url,alt_text',
+    'user.fields': 'name,username,profile_image_url',
+  })
+
+  const mentions = mapMentions(payload)
+  console.log(`Fetched ${mentions.length} mention(s).`)
+  if (mentions.length === 0) return
+
+  const refs = mentions.map((mention) => db.collection(MENTIONS_COLLECTION).doc(mention.id))
+  const snapshots = await db.getAll(...refs)
+  const seen = new Set(snapshots.filter((snap) => snap.exists).map((snap) => snap.id))
+
+  // Only ever create. Re-writing an existing document would reset a mention an
+  // admin had already approved or rejected back to pending on the next run.
+  const fresh = mentions.filter((mention) => !seen.has(mention.id))
+  if (fresh.length === 0) {
+    console.log('No new mentions; existing moderation decisions left alone.')
+    return
+  }
+
+  const batch = db.batch()
+  for (const mention of fresh) {
+    batch.create(db.collection(MENTIONS_COLLECTION).doc(mention.id), {
+      ...mention,
+      // Nothing reaches the public site until an admin approves it.
+      status: 'pending',
+      fetchedAt: FieldValue.serverTimestamp(),
+    })
+  }
+  await batch.commit()
+
+  console.log(`Queued ${fresh.length} new mention(s) for moderation.`)
+}
+
+async function main() {
+  const author = await resolveAuthor()
+
+  const app = initializeApp({ credential: cert(JSON.parse(serviceAccountJson)) })
+  const db = getFirestore(app)
+
+  await syncOwnPosts(db, author)
+
+  if (fetchMentions) {
+    await syncMentions(db, author)
+  } else {
+    console.log('Mentions disabled via X_FETCH_MENTIONS=false.')
+  }
 }
 
 main().catch((error) => {

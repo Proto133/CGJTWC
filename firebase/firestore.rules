@@ -45,6 +45,17 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Posts by other people that mention the club. This is third-party content
+    // on a site for minors, so it is quarantined: the public can only read a
+    // document once an admin has approved it, and admins can change nothing
+    // except that decision. Creation belongs to the scheduled job alone.
+    match /xMentions/{mentionId} {
+      allow read: if resource.data.status == 'approved' || isAdmin();
+      allow create: if false;
+      allow update: if isAdmin() && isValidMentionDecision();
+      allow delete: if isAdmin();
+    }
+
     // ============ WRESTLER REGISTRATIONS ============
     // These documents contain identifying information about minors: names,
     // dates of birth and home addresses. They are therefore WRITE-ONLY for the
@@ -125,6 +136,21 @@ service cloud.firestore {
       return isAdmin() &&
              get(/databases/$(database)/documents/admins/$(request.auth.uid))
                .data.get('role', 'admin') == 'owner';
+    }
+
+    // A moderator may only move a mention between states. Everything else is a
+    // faithful record of what X returned, so allowing edits would let approved
+    // content be swapped for something else after the fact.
+    function isValidMentionDecision() {
+      let d = request.resource.data;
+      let prior = resource.data;
+      return d.status in ['pending', 'approved', 'rejected']
+             && d.id == prior.id
+             && d.text == prior.text
+             && d.permalink == prior.permalink
+             && d.author == prior.author
+             && d.media == prior.media
+             && d.createdAt == prior.createdAt;
     }
 
     function isValidTicket() {

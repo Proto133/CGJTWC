@@ -354,3 +354,25 @@ export interface XFeed {
   posts: XFeedPost[]
   updatedAt?: Timestamp
 }
+
+export type XMentionStatus = 'pending' | 'approved' | 'rejected'
+
+/**
+ * A post from someone else that mentions the club.
+ *
+ * Anyone on X can write one, so these are held in a queue and never appear on
+ * the public site until an admin approves them. The document id is the X post
+ * id, which makes the fetch job idempotent.
+ */
+export interface XMention {
+  id: string
+  text: string
+  createdAt: string | null
+  permalink: string
+  author: XFeedAuthor
+  media: XFeedMedia[]
+  status: XMentionStatus
+  fetchedAt?: Timestamp
+  moderatedBy?: string
+  moderatedAt?: Timestamp
+}
