@@ -68,6 +68,19 @@ service cloud.firestore {
       }
     }
 
+    // ============ ACCOUNT VAULT ============
+    // Stored account credentials. Passwords are encrypted in the browser before
+    // they ever reach Firestore; the passphrase is never sent here. These rules
+    // are the second line of defence, not the first.
+    match /vaultMeta/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /vaultItems/{itemId} {
+      allow read, delete: if isAdmin();
+      allow create, update: if isAdmin() && isValidVaultItem();
+    }
+
     // ============ ADMIN ACCESS CONTROL ============
     // Only users whose UID exists as a document ID in /admins can write
     match /admins/{userId} {
@@ -134,6 +147,31 @@ service cloud.firestore {
              && d.createdByEmail == prior.createdByEmail
              && d.createdAt == prior.createdAt
              && d.type == prior.type;
+    }
+
+    // The password must be a cipher blob rather than a bare string. This is a
+    // structural guard: a coding mistake that tried to save a plaintext
+    // password would be rejected by the database rather than silently stored.
+    function isValidVaultItem() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['platform', 'label', 'username', 'url', 'recoveryEmail',
+                               'twoFactor', 'owner', 'notes', 'password',
+                               'createdAt', 'updatedAt', 'updatedBy'])
+             && d.keys().hasAll(['platform', 'label', 'password'])
+             && d.platform is string && d.platform.size() > 0 && d.platform.size() <= 60
+             && d.label is string && d.label.size() > 0 && d.label.size() <= 120
+             && d.password is map
+             && d.password.keys().hasOnly(['ct', 'iv'])
+             && d.password.keys().hasAll(['ct', 'iv'])
+             && d.password.ct is string && d.password.ct.size() <= 4000
+             && d.password.iv is string && d.password.iv.size() <= 64
+             && (!('username' in d.keys()) || (d.username is string && d.username.size() <= 200))
+             && (!('url' in d.keys()) || (d.url is string && d.url.size() <= 500))
+             && (!('recoveryEmail' in d.keys())
+                 || (d.recoveryEmail is string && d.recoveryEmail.size() <= 200))
+             && (!('twoFactor' in d.keys()) || (d.twoFactor is string && d.twoFactor.size() <= 120))
+             && (!('owner' in d.keys()) || (d.owner is string && d.owner.size() <= 120))
+             && (!('notes' in d.keys()) || (d.notes is string && d.notes.size() <= 2000));
     }
 
     function isValidComment() {

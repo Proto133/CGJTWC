@@ -36,6 +36,54 @@ export interface AdminDoc {
 // Internal bug reports / feature requests
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Account vault
+// ---------------------------------------------------------------------------
+
+/** AES-GCM ciphertext plus its nonce, both base64. Never a plaintext string. */
+export interface CipherBlobDoc {
+  ct: string
+  iv: string
+}
+
+/**
+ * A stored account. Only `password` is encrypted — everything else stays in
+ * plaintext deliberately, so the inventory remains searchable and useful, and
+ * because none of it is a secret on its own.
+ */
+export interface VaultItem {
+  id: string
+  /** e.g. Instagram, Facebook, Gmail. */
+  platform: string
+  /** Human label, e.g. "Club Instagram". */
+  label: string
+  username?: string
+  url?: string
+  recoveryEmail?: string
+  /** Free text, e.g. "Authenticator app on Pete's phone". */
+  twoFactor?: string
+  /** Who is responsible for this account. */
+  owner?: string
+  notes?: string
+  password: CipherBlobDoc
+  createdAt?: Timestamp
+  updatedAt?: Timestamp
+  updatedBy?: string
+}
+
+export interface VaultItemInput {
+  platform: string
+  label: string
+  username?: string
+  url?: string
+  recoveryEmail?: string
+  twoFactor?: string
+  owner?: string
+  notes?: string
+  /** Plaintext here; the store encrypts before writing. */
+  password: string
+}
+
 export type TicketType = 'bug' | 'feature'
 export type TicketStatus = 'open' | 'in-progress' | 'completed'
 export type TicketPriority = 'low' | 'normal' | 'high'

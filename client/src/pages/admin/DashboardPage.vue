@@ -6,6 +6,7 @@ import { useStaffStore } from 'stores/staff'
 import { useRegistrationsStore } from 'stores/registrations'
 import { useAccessRequestsStore } from 'stores/accessRequests'
 import { useTicketsStore } from 'stores/tickets'
+import { useVaultStore } from 'stores/vault'
 import { useAuthStore } from 'stores/auth'
 import EventForm from 'components/admin/EventForm.vue'
 import AnnouncementForm from 'components/admin/AnnouncementForm.vue'
@@ -14,6 +15,7 @@ import SettingsForm from 'components/admin/SettingsForm.vue'
 import RegistrationsInbox from 'components/admin/RegistrationsInbox.vue'
 import AccessRequestsInbox from 'components/admin/AccessRequestsInbox.vue'
 import FeedbackBoard from 'components/admin/FeedbackBoard.vue'
+import AccountsVault from 'components/admin/AccountsVault.vue'
 import type {
   Event,
   Announcement,
@@ -31,6 +33,7 @@ type Tab =
   | 'registrations'
   | 'access'
   | 'feedback'
+  | 'accounts'
   | 'settings'
 
 const tab = ref<Tab>('events')
@@ -41,6 +44,7 @@ const staffStore = useStaffStore()
 const registrationsStore = useRegistrationsStore()
 const accessRequestsStore = useAccessRequestsStore()
 const ticketsStore = useTicketsStore()
+const vaultStore = useVaultStore()
 const authStore = useAuthStore()
 
 // Form state
@@ -59,6 +63,7 @@ onMounted(() => {
   registrationsStore.subscribe()
   accessRequestsStore.subscribe()
   ticketsStore.subscribe()
+  vaultStore.subscribe()
 })
 
 onUnmounted(() => {
@@ -68,6 +73,8 @@ onUnmounted(() => {
   registrationsStore.unsubscribeFromRegistrations()
   accessRequestsStore.unsubscribeFromAccessRequests()
   ticketsStore.unsubscribeFromTickets()
+  // Also discards the decryption key.
+  vaultStore.unsubscribeFromVault()
 })
 
 // ----- Events -----
@@ -228,6 +235,15 @@ function confirmDeleteStaff(member: StaffMember) {
         >
           {{ ticketsStore.tickets.filter((t) => t.status !== 'completed').length }}
         </q-badge>
+      </q-tab>
+      <q-tab name="accounts" icon="vpn_key">
+        <span class="q-ml-sm">Accounts</span>
+        <q-icon
+          v-if="!vaultStore.isUnlocked"
+          name="lock"
+          size="14px"
+          class="q-ml-xs"
+        />
       </q-tab>
       <q-tab name="settings" label="Settings" icon="settings" />
     </q-tabs>
@@ -442,6 +458,11 @@ function confirmDeleteStaff(member: StaffMember) {
       <!-- FEEDBACK -->
       <q-tab-panel name="feedback" class="q-px-none">
         <FeedbackBoard />
+      </q-tab-panel>
+
+      <!-- ACCOUNT VAULT -->
+      <q-tab-panel name="accounts" class="q-px-none">
+        <AccountsVault />
       </q-tab-panel>
 
       <!-- SETTINGS -->
