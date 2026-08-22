@@ -317,3 +317,40 @@ export interface GalleryItem {
   order: number
   createdAt?: Timestamp
 }
+
+// ---------------------------------------------------------------------------
+// X (Twitter) feed
+// ---------------------------------------------------------------------------
+// Written by scripts/fetch-x-posts.mjs on a schedule, never by the browser.
+// The embed widget is not used for these: X's profile-timeline endpoint returns
+// an empty result set for this account, so the posts are fetched through the
+// paid API and rendered with our own markup.
+
+export interface XFeedMedia {
+  /** 'photo' | 'video' | 'animated_gif'; videos carry their poster frame. */
+  type: string
+  url: string
+  alt: string
+}
+
+export interface XFeedPost {
+  id: string
+  text: string
+  /** ISO 8601 from the X API, or null if it was somehow absent. */
+  createdAt: string | null
+  permalink: string
+  media: XFeedMedia[]
+}
+
+export interface XFeedAuthor {
+  name: string
+  username: string
+  avatar: string
+}
+
+export interface XFeed {
+  handle: string
+  author: XFeedAuthor
+  posts: XFeedPost[]
+  updatedAt?: Timestamp
+}

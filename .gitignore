@@ -16,6 +16,10 @@ client/.env.local
 # Firebase
 .firebase/
 firebase-debug.log
+# Service account keys grant full admin access to the project and bypass all
+# security rules. They belong in GitHub secrets, never in the repository.
+*service-account*.json
+*serviceAccount*.json
 
 # IDE / OS
 .idea/

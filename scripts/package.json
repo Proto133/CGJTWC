@@ -1,0 +1,13 @@
+{
+  "name": "cgjt-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Server-side maintenance scripts. Kept out of the client package so the browser bundle never sees firebase-admin.",
+  "scripts": {
+    "fetch-x-posts": "node fetch-x-posts.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0"
+  }
+}

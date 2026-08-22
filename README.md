@@ -280,19 +280,91 @@ Your site will be live at `https://your-project.web.app`
 
 ## X (Twitter) Feed Setup
 
-The Home page includes an official X embedded timeline.
+The Home page shows the club's latest X posts. They are fetched server-side and
+cached in Firestore, then rendered with our own markup.
 
-1. Find the real club handle (e.g. `@CGJTWrestling`)
-2. Open `client/src/pages/IndexPage.vue` and update the `handle` prop on the
-   `<XTimeline />` tag (the `limit` prop controls how many posts show)
-3. The default handle lives in `client/src/components/XTimeline.vue` if you
-   prefer to change it in one place
+### Why it works this way
 
-The embed is mobile-friendly and updates automatically.
+The obvious approach — X's embedded timeline widget — does not work for this
+account. X's syndication endpoint answers `HTTP 200` with `"entries": []` for
+`@CaryTrojansWC`, while returning a full timeline for large accounts fetched
+seconds earlier from the same IP. Single-post embeds *do* work, which is why
+the curated "featured posts" path still exists as a fallback.
 
-> X aggressively rate-limits its timeline widget. Seeing `429` responses for
-> `platform.twitter.com` in the console — especially from `localhost` or for a
-> placeholder/private account — is an X-side limit, not a bug in this app.
+So the primary path uses the paid X API instead. That has to run server-side: a
+bearer token in the browser bundle is readable by anyone, and a leaked token
+spends real credits. There is no backend (Cloud Functions would need the Blaze
+plan), so a scheduled GitHub Action fills that role. It is free on a public
+repository.
+
+```
+GitHub Action (every 6h)  ->  X API  ->  Firestore social/xFeed  ->  site
+```
+
+The site subscribes to that document, so a successful run appears without a
+redeploy.
+
+### Cost
+
+Reading your own account's posts is an "owned read" at **$0.001 per post**. X
+deduplicates charges for the same post within a UTC day, so four runs a day cost
+little more than one. Expect single-digit dollars per *year* at club posting
+volume. Set a spending limit in the X Developer Console anyway.
+
+Note the free tier was removed in February 2026 and the old $200/month Basic
+tier is closed — pay-per-use with prepaid credits is the only self-serve option.
+
+### One-time setup
+
+1. **Get a bearer token.** <https://console.x.com> → create a Project, then an
+   App inside it → copy the OAuth 2.0 **Bearer Token**. Read-only app-only auth
+   is all this needs. Load credits and set a spending limit while you are there.
+2. **Create a Firebase service account key.** Firebase Console → Project
+   Settings → Service Accounts → **Generate new private key**. This downloads a
+   JSON file. It grants full admin access and bypasses all security rules, so
+   never commit it — `.gitignore` blocks the usual filenames as a backstop.
+3. **Add two repository secrets** under Settings → Secrets and variables →
+   Actions → Secrets:
+   - `X_BEARER_TOKEN` — the token from step 1
+   - `FIREBASE_SERVICE_ACCOUNT` — the *entire contents* of the JSON file
+4. **Run it once.** Actions tab → "Refresh X feed" → Run workflow.
+5. **Pin the user id.** The first run prints the numeric id for the handle.
+   Add it as a repository *variable* named `X_USER_ID`. Resolving a handle is a
+   $0.010 user read; pinning the id skips that on every future run.
+
+Optional repository variables: `X_HANDLE` (defaults to `CaryTrojansWC`) and
+`X_MAX_POSTS` (defaults to 6, minimum 5).
+
+### Fallback order
+
+The component tries each in turn:
+
+1. **API posts** from `social/xFeed` — rendered natively. When these exist the
+   page loads no third-party script at all.
+2. **Featured posts** — post URLs set in Admin → Settings → Social accounts,
+   embedded with X's `createTweet`. Useful before the job first runs, or to pin
+   something specific.
+3. **Profile timeline widget** — kept for completeness; currently returns empty
+   for this account.
+4. **A plain link** to the profile.
+
+Because `mergeSection` treats an empty array as "not set", clearing the featured
+list in the dashboard falls back to the defaults in `organization.ts` rather
+than showing none. Edit that file to remove the seeded post.
+
+### Things that are not possible
+
+- **Mentions.** X retired search and mention embeds; the API can fetch them, but
+  auto-publishing arbitrary strangers' content on a youth club site is a
+  moderation problem, so it is deliberately not wired up.
+- **Live updates.** The embedded-timeline widget dropped live updates in 2022,
+  and the scheduled job runs every six hours. Use the manual "Run workflow"
+  button to refresh immediately after posting.
+
+> Seeing `429` responses from `syndication.twitter.com` in the console is an
+> X-side per-IP rate limit on the *widget*, not a bug in this app. Repeated
+> testing from one address triggers it and it affects the browser too. The API
+> path does not go through that host.
 
 ---
 

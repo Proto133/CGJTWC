@@ -35,6 +35,16 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // Cached copy of the club's X posts, refreshed by the scheduled GitHub
+    // Action. Nothing in the browser may write here, not even an admin: the
+    // only writer is the Admin SDK in that job, which bypasses these rules
+    // entirely. Denying writes outright means a stolen admin session cannot
+    // put arbitrary markup on the home page.
+    match /social/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // ============ WRESTLER REGISTRATIONS ============
     // These documents contain identifying information about minors: names,
     // dates of birth and home addresses. They are therefore WRITE-ONLY for the

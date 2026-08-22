@@ -1,0 +1,54 @@
+name: Refresh X feed
+
+# Pulls the club's latest X posts into Firestore. This exists because the site
+# is a static SPA with no backend: an X bearer token cannot ship in the browser
+# bundle, and Cloud Functions would require the Blaze plan. A scheduled Action
+# is free on a public repository and keeps the token in repository secrets.
+#
+# The site reads Firestore live, so a successful run appears on the site without
+# a redeploy.
+
+on:
+  schedule:
+    # Every six hours. X deduplicates charges for the same post within a UTC
+    # day, so polling more often buys little; four runs a day keeps the worst
+    # case around a few cents a month even if deduplication misses.
+    - cron: '17 */6 * * *'
+  # Lets you refresh immediately after posting, from the Actions tab.
+  workflow_dispatch:
+
+# No repository contents are written; the job only talks to X and Firestore.
+permissions:
+  contents: read
+
+concurrency:
+  group: fetch-x-posts
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        working-directory: scripts
+        run: npm install --no-audit --no-fund
+
+      - name: Fetch posts
+        working-directory: scripts
+        env:
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          # Which account to read. Kept as a variable rather than a secret so it
+          # is visible and easy to change.
+          X_HANDLE: ${{ vars.X_HANDLE || 'CaryTrojansWC' }}
+          # Set this repository variable to the id printed by the first run to
+          # skip a $0.010 handle lookup on every subsequent run.
+          X_USER_ID: ${{ vars.X_USER_ID }}
+          X_MAX_POSTS: ${{ vars.X_MAX_POSTS || '6' }}
+        run: node fetch-x-posts.mjs
