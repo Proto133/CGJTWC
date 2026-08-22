@@ -2,12 +2,20 @@
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useSettingsStore } from 'stores/settings'
+import { useAuthStore } from 'stores/auth'
+import TicketDialog from 'components/admin/TicketDialog.vue'
 import { assetUrl } from 'src/utils/assets'
 
 const logoUrl = assetUrl('assets/JTWC-white-192.png')
 const route = useRoute()
 const settings = useSettingsStore()
+const auth = useAuthStore()
 const leftDrawerOpen = ref(false)
+
+// Admin-only shortcut for reporting whatever you are looking at. Hidden
+// entirely from visitors, and the rules reject non-admin writes regardless.
+const reportOpen = ref(false)
+const currentPage = computed(() => route.fullPath)
 
 const org = computed(() => settings.org)
 const socialLinks = computed(() => settings.socialLinks)
@@ -176,6 +184,23 @@ function isActive(to: string) {
     <q-page-container>
       <router-view />
     </q-page-container>
+
+    <!-- Report a bug / request a feature, admins only -->
+    <q-page-sticky v-if="auth.isAdmin" position="bottom-right" :offset="[18, 18]">
+      <q-btn
+        fab
+        icon="bug_report"
+        color="primary"
+        aria-label="Report a bug or request a feature"
+        @click="reportOpen = true"
+      >
+        <q-tooltip anchor="top middle" self="bottom middle">
+          Report a bug or request a feature
+        </q-tooltip>
+      </q-btn>
+    </q-page-sticky>
+
+    <TicketDialog v-model="reportOpen" :page-url="currentPage" />
 
     <!-- Footer -->
     <footer class="site-footer">

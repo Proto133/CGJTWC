@@ -5,6 +5,7 @@ import { useAnnouncementsStore } from 'stores/announcements'
 import { useStaffStore } from 'stores/staff'
 import { useRegistrationsStore } from 'stores/registrations'
 import { useAccessRequestsStore } from 'stores/accessRequests'
+import { useTicketsStore } from 'stores/tickets'
 import { useAuthStore } from 'stores/auth'
 import EventForm from 'components/admin/EventForm.vue'
 import AnnouncementForm from 'components/admin/AnnouncementForm.vue'
@@ -12,6 +13,7 @@ import StaffForm from 'components/admin/StaffForm.vue'
 import SettingsForm from 'components/admin/SettingsForm.vue'
 import RegistrationsInbox from 'components/admin/RegistrationsInbox.vue'
 import AccessRequestsInbox from 'components/admin/AccessRequestsInbox.vue'
+import FeedbackBoard from 'components/admin/FeedbackBoard.vue'
 import type {
   Event,
   Announcement,
@@ -28,6 +30,7 @@ type Tab =
   | 'staff'
   | 'registrations'
   | 'access'
+  | 'feedback'
   | 'settings'
 
 const tab = ref<Tab>('events')
@@ -37,6 +40,7 @@ const announcementsStore = useAnnouncementsStore()
 const staffStore = useStaffStore()
 const registrationsStore = useRegistrationsStore()
 const accessRequestsStore = useAccessRequestsStore()
+const ticketsStore = useTicketsStore()
 const authStore = useAuthStore()
 
 // Form state
@@ -54,6 +58,7 @@ onMounted(() => {
   // Admin-only: rules deny these reads to everyone else.
   registrationsStore.subscribe()
   accessRequestsStore.subscribe()
+  ticketsStore.subscribe()
 })
 
 onUnmounted(() => {
@@ -62,6 +67,7 @@ onUnmounted(() => {
   staffStore.unsubscribeFromStaff()
   registrationsStore.unsubscribeFromRegistrations()
   accessRequestsStore.unsubscribeFromAccessRequests()
+  ticketsStore.unsubscribeFromTickets()
 })
 
 // ----- Events -----
@@ -211,6 +217,16 @@ function confirmDeleteStaff(member: StaffMember) {
           class="q-ml-sm"
         >
           {{ accessRequestsStore.requests.length }}
+        </q-badge>
+      </q-tab>
+      <q-tab name="feedback" icon="bug_report">
+        <span class="q-ml-sm">Feedback</span>
+        <q-badge
+          v-if="ticketsStore.tickets.filter((t) => t.status !== 'completed').length"
+          color="primary"
+          class="q-ml-sm"
+        >
+          {{ ticketsStore.tickets.filter((t) => t.status !== 'completed').length }}
         </q-badge>
       </q-tab>
       <q-tab name="settings" label="Settings" icon="settings" />
@@ -421,6 +437,11 @@ function confirmDeleteStaff(member: StaffMember) {
       <!-- ACCESS REQUESTS -->
       <q-tab-panel name="access" class="q-px-none">
         <AccessRequestsInbox />
+      </q-tab-panel>
+
+      <!-- FEEDBACK -->
+      <q-tab-panel name="feedback" class="q-px-none">
+        <FeedbackBoard />
       </q-tab-panel>
 
       <!-- SETTINGS -->

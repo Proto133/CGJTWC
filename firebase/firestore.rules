@@ -48,6 +48,26 @@ service cloud.firestore {
       allow update: if isAdmin() && isValidRegistrationUpdate();
     }
 
+    // ============ BUG REPORTS / FEATURE REQUESTS ============
+    // Entirely internal: every operation requires an admin. Status is owner-only
+    // so the backlog has a single decision maker, while any admin can file and
+    // discuss.
+    match /tickets/{ticketId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidTicket();
+      allow update: if isOwner() && isValidTicketUpdate();
+      allow delete: if isOwner();
+
+      match /comments/{commentId} {
+        allow read: if isAdmin();
+        allow create: if isAdmin() && isValidComment();
+        // Comments are an audit trail of a conversation, so they are immutable.
+        allow update: if false;
+        allow delete: if isOwner()
+                      || (isAdmin() && resource.data.authorUid == request.auth.uid);
+      }
+    }
+
     // ============ ADMIN ACCESS CONTROL ============
     // Only users whose UID exists as a document ID in /admins can write
     match /admins/{userId} {
@@ -74,6 +94,57 @@ service cloud.firestore {
     function isAdmin() {
       return request.auth != null &&
              exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // An admin whose record carries role == 'owner'. Admin documents without a
+    // role default to a plain admin, so ownership has to be granted explicitly.
+    function isOwner() {
+      return isAdmin() &&
+             get(/databases/$(database)/documents/admins/$(request.auth.uid))
+               .data.get('role', 'admin') == 'owner';
+    }
+
+    function isValidTicket() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['type', 'title', 'description', 'priority', 'pageUrl',
+                               'status', 'createdByUid', 'createdByEmail',
+                               'createdAt', 'updatedAt'])
+             && d.keys().hasAll(['type', 'title', 'description', 'priority',
+                                 'status', 'createdByUid', 'createdByEmail', 'createdAt'])
+             && d.type in ['bug', 'feature']
+             && d.title is string && d.title.size() > 0 && d.title.size() <= 140
+             && d.description is string && d.description.size() <= 5000
+             && d.priority in ['low', 'normal', 'high']
+             && (!('pageUrl' in d.keys()) || (d.pageUrl is string && d.pageUrl.size() <= 500))
+             // Everything starts open; only the owner advances it.
+             && d.status == 'open'
+             // Attribution cannot be forged.
+             && d.createdByUid == request.auth.uid
+             && d.createdByEmail is string
+             && d.createdAt == request.time;
+    }
+
+    function isValidTicketUpdate() {
+      let d = request.resource.data;
+      let prior = resource.data;
+      return d.status in ['open', 'in-progress', 'completed']
+             && d.priority in ['low', 'normal', 'high']
+             // Provenance is immutable.
+             && d.createdByUid == prior.createdByUid
+             && d.createdByEmail == prior.createdByEmail
+             && d.createdAt == prior.createdAt
+             && d.type == prior.type;
+    }
+
+    function isValidComment() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['body', 'authorUid', 'authorEmail', 'createdAt'])
+             && d.keys().hasAll(['body', 'authorUid', 'authorEmail', 'createdAt'])
+             && d.body is string && d.body.size() > 0 && d.body.size() <= 4000
+             // You can only speak as yourself.
+             && d.authorUid == request.auth.uid
+             && d.authorEmail is string && d.authorEmail.size() <= 120
+             && d.createdAt == request.time;
     }
 
     // Locks the shape of an access request so it cannot be used as free storage.

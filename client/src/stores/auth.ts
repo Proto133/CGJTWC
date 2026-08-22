@@ -15,17 +15,26 @@ import { errorCode } from 'src/utils/errors'
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
   const isAdmin = ref(false)
+  /** Owners may change ticket status; plain admins may not. */
+  const isOwner = ref(false)
   const isReady = ref(false)
   const loading = ref(false)
 
   const isAuthenticated = computed(() => !!user.value)
 
+  /**
+   * Reads the caller's own admin record. Existence grants admin; the optional
+   * `role` field distinguishes the owner. Rules allow reading only your own
+   * document, which is why this cannot enumerate other admins.
+   */
   async function checkAdminStatus(uid: string): Promise<boolean> {
     try {
       const adminDoc = await getDoc(doc(db, 'admins', uid))
+      isOwner.value = adminDoc.exists() && adminDoc.data()?.role === 'owner'
       return adminDoc.exists()
     } catch (error) {
       console.error('Error checking admin status', error)
+      isOwner.value = false
       return false
     }
   }
@@ -153,6 +162,7 @@ export const useAuthStore = defineStore('auth', () => {
       await signOut(auth)
       user.value = null
       isAdmin.value = false
+      isOwner.value = false
       Notify.create({ type: 'info', message: 'Logged out successfully' })
     } catch {
       Notify.create({ type: 'negative', message: 'Logout failed' })
@@ -162,6 +172,7 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     user,
     isAdmin,
+    isOwner,
     isAuthenticated,
     isReady,
     loading,

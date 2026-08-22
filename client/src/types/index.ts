@@ -22,10 +22,53 @@ export interface Announcement {
   updatedAt: Timestamp
 }
 
+export type AdminRole = 'owner' | 'admin'
+
 export interface AdminDoc {
   email?: string
   name?: string
+  /** Absent means a plain admin. Only an owner can change ticket status. */
+  role?: AdminRole
   addedAt?: Timestamp
+}
+
+// ---------------------------------------------------------------------------
+// Internal bug reports / feature requests
+// ---------------------------------------------------------------------------
+
+export type TicketType = 'bug' | 'feature'
+export type TicketStatus = 'open' | 'in-progress' | 'completed'
+export type TicketPriority = 'low' | 'normal' | 'high'
+
+export interface Ticket {
+  id: string
+  type: TicketType
+  title: string
+  description: string
+  priority: TicketPriority
+  /** Page the reporter was on when they hit the issue. */
+  pageUrl?: string
+  status: TicketStatus
+  createdByUid: string
+  createdByEmail: string
+  createdAt: Timestamp
+  updatedAt?: Timestamp
+}
+
+export interface TicketFormPayload {
+  type: TicketType
+  title: string
+  description: string
+  priority: TicketPriority
+  pageUrl?: string
+}
+
+export interface TicketComment {
+  id: string
+  body: string
+  authorUid: string
+  authorEmail: string
+  createdAt: Timestamp
 }
 
 // Written to /accessRequests/{uid} when someone signs up. The document ID is
