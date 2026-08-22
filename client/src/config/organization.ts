@@ -58,9 +58,13 @@ export interface OrganizationSocial {
    * Specific post URLs to embed, newest first.
    *
    * The profile-timeline embed and the single-post embed use different
-   * pipelines at X, and the timeline one frequently serves nothing for new or
-   * low-volume accounts. Individual posts render reliably, so these act as a
-   * dependable alternative when the timeline comes back empty.
+   * pipelines at X. For this account the timeline pipeline returns HTTP 200
+   * with an empty result set, while single posts render fine, so these are the
+   * only reliable way to show anything.
+   *
+   * Caveat: an empty array from the admin form falls back to the defaults
+   * below, because mergeSection treats an empty array as "not set". To show no
+   * posts at all, clear the list here rather than in the dashboard.
    */
   featuredPosts: string[]
 }
@@ -155,7 +159,11 @@ export const defaultOrganization: OrganizationSettings = {
     x: 'CaryTrojansWC',
     facebook: '',
     instagram: '',
-    featuredPosts: [],
+    // Newest first. Admins can manage this list from the dashboard; it is
+    // seeded here so the home page shows a post before anyone edits settings.
+    featuredPosts: [
+      'https://x.com/CaryTrojansWC/status/2091008347096912231',
+    ],
   },
 
   program: {

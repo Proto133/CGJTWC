@@ -1,12 +1,32 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, computed } from 'vue'
+import { onMounted, onBeforeUnmount, ref, computed, watch, nextTick } from 'vue'
 import { useSettingsStore } from '../stores/settings'
 
-type Twttr = { widgets: { load: (el?: HTMLElement) => void } }
+/**
+ * The factory half of the widgets API. Both factories resolve with the element
+ * they built, or with `undefined` when X declined to build it — that undefined
+ * is the only explicit failure signal the script offers, so it is typed and
+ * checked rather than discarded.
+ */
+type WidgetOptions = Record<string, unknown>
+type Twttr = {
+  widgets: {
+    createTimeline: (
+      source: { sourceType: 'profile'; screenName: string },
+      target: HTMLElement,
+      options?: WidgetOptions,
+    ) => Promise<HTMLElement | undefined>
+    createTweet: (
+      id: string,
+      target: HTMLElement,
+      options?: WidgetOptions,
+    ) => Promise<HTMLElement | undefined>
+  }
+  ready?: (cb: () => void) => void
+}
 
 const props = defineProps<{
   handle?: string
-  limit?: number
 }>()
 
 const settings = useSettingsStore()
@@ -17,19 +37,25 @@ const brandIcon = computed(() => settings.xSocial?.svgPath ?? '')
 
 /**
  * Admin-curated post URLs. When present these are shown instead of relying on
- * the profile timeline, which X often serves empty for new or quiet accounts.
+ * the profile timeline, which X serves empty for this account.
  */
 const featuredPosts = computed(() =>
   (settings.org.social.featuredPosts ?? []).filter((url) => url.trim() !== ''))
 
 const hasFeatured = computed(() => featuredPosts.value.length > 0)
+
+/** False until a render attempt has finished, either way. */
 const loaded = ref(false)
-/** True when X did not actually render a timeline, so we show a link inste
-/** True when X did not actually render a timeline, so we show a link instead. */
+/** True when X gave us nothing, so we show a plain link instead. */
 const unavailable = ref(false)
-const container = ref<HTMLElement | null>(null)
+/** The node the widget script owns. Never touched by the template. */
+const widgetHost = ref<HTMLElement | null>(null)
+
 let checkTimer: ReturnType<typeof setInterval> | null = null
 let checkDeadline = 0
+let disposed = false
+/** Guards against an in-flight render finishing after a newer one started. */
+let renderToken = 0
 
 /**
  * X's publish tool now hands out platform.x.com rather than the older
@@ -41,96 +67,189 @@ const SCRIPT_SRC = 'https://platform.x.com/widgets.js'
 const RENDER_POLL_MS = 1000
 /** Total time to keep waiting before falling back to a plain link. */
 const RENDER_TIMEOUT_MS = 15000
-/** Below this the iframe is present but empty rather than genuinely rendered. */
+/** Below this the iframe exists but is empty rather than genuinely rendered. */
 const MIN_RENDERED_HEIGHT = 40
+const TIMELINE_HEIGHT = 320
+
+function getTwttr(): Twttr | undefined {
+  return (window as unknown as { twttr?: Twttr }).twttr
+}
 
 function stopChecking() {
   if (checkTimer) clearInterval(checkTimer)
   checkTimer = null
 }
 
+/** createTweet wants the numeric status id; admins paste whole post URLs. */
+function tweetIdFromUrl(url: string): string | null {
+  return /status(?:es)?\/(\d+)/.exec(url)?.[1] ?? null
+}
+
 /**
- * X frequently answers the syndication endpoint with 429 for embeds. When that
- * happens the script still injects an iframe, but it stays zero-height, leaving
- * an empty bordered box on the page. Height is therefore the only reliable
- * signal of success — the script reports nothing and the iframe is cross-origin,
- * so neither load events nor its contents can be inspected.
- *
- * Polled rather than measured once: the widget can take a while to paint, and a
- * single early measurement would latch `unavailable` and hide a timeline that
- * was merely slow.
+ * A profile timeline can resolve with an element and still be empty, which is
+ * exactly what X returns for this account. Height is the only way to tell the
+ * difference, and it is polled because the widget can paint late.
  */
 function checkRendered() {
-  // Featured posts render as their own iframes, so the timeline check does not
-  // apply and the fallback link is unnecessary.
-  if (hasFeatured.value) {
-    unavailable.value = false
-    stopChecking()
-    return
-  }
-
-  const iframe = container.value?.querySelector('iframe')
+  const iframe = widgetHost.value?.querySelector('iframe')
   const height = iframe?.getBoundingClientRect().height ?? 0
 
   if (height >= MIN_RENDERED_HEIGHT) {
-    // Rendered after all; make sure any earlier fallback is retracted.
     unavailable.value = false
     stopChecking()
     return
   }
 
-  // Only give up once the whole grace period has elapsed.
   if (Date.now() >= checkDeadline) {
     unavailable.value = true
     stopChecking()
   }
 }
 
-// The widget script only auto-scans the DOM the first time it loads. On any
-// subsequent SPA navigation the script is already cached, so we have to ask it
-// to re-scan our container explicitly or the embed never renders.
-function renderWidget() {
-  const twttr = (window as unknown as { twttr?: Twttr }).twttr
-  if (!twttr?.widgets || !container.value) return
-  twttr.widgets.load(container.value)
-  loaded.value = true
-
+function startRenderWatch() {
   stopChecking()
   checkDeadline = Date.now() + RENDER_TIMEOUT_MS
   checkTimer = setInterval(checkRendered, RENDER_POLL_MS)
 }
 
-function loadXScript() {
-  if ((window as unknown as { twttr?: Twttr }).twttr) {
-    renderWidget()
+/** Returns how many of the curated posts X actually built. */
+async function renderFeatured(twttr: Twttr, host: HTMLElement, token: number) {
+  let rendered = 0
+
+  for (const url of featuredPosts.value) {
+    const id = tweetIdFromUrl(url)
+    if (!id) continue
+
+    const slot = document.createElement('div')
+    host.appendChild(slot)
+
+    const el = await twttr.widgets.createTweet(id, slot, {
+      theme: 'light',
+      dnt: true,
+      align: 'center',
+      conversation: 'none',
+    })
+
+    if (token !== renderToken) return rendered
+    if (el) rendered += 1
+    else slot.remove()
+  }
+
+  return rendered
+}
+
+async function renderWidget() {
+  const twttr = getTwttr()
+  const host = widgetHost.value
+  if (!twttr?.widgets || !host) return
+
+  const token = ++renderToken
+  stopChecking()
+  host.replaceChildren()
+  unavailable.value = false
+
+  try {
+    if (hasFeatured.value) {
+      const rendered = await renderFeatured(twttr, host, token)
+      if (token !== renderToken || disposed) return
+      // Curated posts are discrete iframes, so their own success count decides
+      // the fallback; there is no timeline height to poll.
+      unavailable.value = rendered === 0
+      return
+    }
+
+    const el = await twttr.widgets.createTimeline(
+      { sourceType: 'profile', screenName: handle.value },
+      host,
+      {
+        height: TIMELINE_HEIGHT,
+        theme: 'light',
+        dnt: true,
+        lang: 'en',
+        // Our own header already names the account, so drop the widget's.
+        chrome: 'noheader nofooter',
+      },
+    )
+
+    if (token !== renderToken || disposed) return
+
+    if (!el) {
+      unavailable.value = true
+      return
+    }
+
+    startRenderWatch()
+  } catch (error) {
+    if (token !== renderToken || disposed) return
+    console.warn('X embed failed to render:', error)
+    unavailable.value = true
+  } finally {
+    if (token === renderToken && !disposed) loaded.value = true
+  }
+}
+
+/**
+ * `twttr.ready` fires once the widget API is usable, which is not the same as
+ * the script tag's load event. Note it returns undefined, so it must not be
+ * chained with `??` onto a direct call or the callback runs twice.
+ */
+function whenReady(cb: () => void) {
+  const existing = getTwttr()
+  if (existing?.ready) {
+    existing.ready(cb)
+    return
+  }
+  if (existing?.widgets) {
+    cb()
     return
   }
 
+  const onLoad = () => {
+    const twttr = getTwttr()
+    if (twttr?.ready) twttr.ready(cb)
+    else cb()
+  }
+
   // Reuse an in-flight script tag instead of appending a duplicate.
-  const existing = document.querySelector<HTMLScriptElement>(`script[src="${SCRIPT_SRC}"]`)
-  if (existing) {
-    existing.addEventListener('load', renderWidget, { once: true })
+  const existingTag = document.querySelector<HTMLScriptElement>(`script[src="${SCRIPT_SRC}"]`)
+  if (existingTag) {
+    existingTag.addEventListener('load', onLoad, { once: true })
     return
   }
 
   const script = document.createElement('script')
   script.src = SCRIPT_SRC
   script.async = true
-  script.addEventListener('load', renderWidget, { once: true })
+  script.addEventListener('load', onLoad, { once: true })
+  script.addEventListener('error', () => {
+    if (disposed) return
+    unavailable.value = true
+    loaded.value = true
+  }, { once: true })
   document.head.appendChild(script)
 }
 
 onMounted(() => {
-  loadXScript()
+  whenReady(() => {
+    void renderWidget()
+  })
+})
+
+// Settings arrive from Firestore after mount, so the first render can happen
+// against the default handle with no curated posts. Rebuild when either lands.
+watch([handle, featuredPosts], () => {
+  if (!getTwttr()?.widgets) return
+  void nextTick(() => renderWidget())
 })
 
 onBeforeUnmount(() => {
+  disposed = true
   stopChecking()
 })
 </script>
 
 <template>
-  <div ref="container" class="x-embed q-pa-md bg-white">
+  <div class="x-embed q-pa-md bg-white">
     <div class="row items-center q-mb-md">
       <!-- Inline brand mark: the bundled material-icons set has no brand glyphs,
            and the previous "fab fa-x-twitter" name required Font Awesome, which
@@ -144,39 +263,12 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- Curated posts take priority: single-post embeds are served reliably,
-         whereas the profile timeline often is not for a new account. -->
-    <div v-if="hasFeatured" class="x-posts">
-      <blockquote
-        v-for="url in featuredPosts"
-        :key="url"
-        class="twitter-tweet"
-        data-theme="light"
-        data-dnt="true"
-      >
-        <a :href="url">{{ url }}</a>
-      </blockquote>
-    </div>
+    <!-- The widget script owns this node: it is populated by createTweet or
+         createTimeline, never by the template, and hidden rather than removed
+         on failure so the script's own teardown stays valid. -->
+    <div ref="widgetHost" v-show="!unavailable" class="x-posts"></div>
 
-    <!-- Official X Embedded Timeline. Hidden rather than removed when it fails,
-         because the script owns this node once it has run. -->
-    <div v-else v-show="!unavailable">
-      <!-- Markup mirrors what publish.x.com generates, including ref_src.
-           data-tweet-limit is deliberately omitted: it switches the widget into
-           a fixed-set mode rather than a timeline, which is another thing to go
-           wrong for no benefit here. -->
-      <a
-        class="twitter-timeline"
-        data-lang="en"
-        data-theme="light"
-        :data-height="320"
-        :href="`https://x.com/${handle}?ref_src=twsrc%5Etfw`"
-      >
-        Posts by {{ handle }}
-      </a>
-    </div>
-
-    <div v-if="!loaded && !unavailable && !hasFeatured"
+    <div v-if="!loaded && !unavailable"
          class="text-caption text-center q-mt-sm text-grey">
       Loading latest posts...
     </div>
