@@ -84,7 +84,7 @@ onUnmounted(() => {
         </div>
 
         <div class="col-12 col-md-5">
-          <XTimeline :limit="3" />
+          <XTimeline />
         </div>
       </section>
 

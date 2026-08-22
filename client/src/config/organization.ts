@@ -54,6 +54,15 @@ export interface OrganizationSocial {
   x: string
   facebook: string
   instagram: string
+  /**
+   * Specific post URLs to embed, newest first.
+   *
+   * The profile-timeline embed and the single-post embed use different
+   * pipelines at X, and the timeline one frequently serves nothing for new or
+   * low-volume accounts. Individual posts render reliably, so these act as a
+   * dependable alternative when the timeline comes back empty.
+   */
+  featuredPosts: string[]
 }
 
 export interface OrganizationProgram {
@@ -146,6 +155,7 @@ export const defaultOrganization: OrganizationSettings = {
     x: 'CaryTrojansWC',
     facebook: '',
     instagram: '',
+    featuredPosts: [],
   },
 
   program: {
@@ -226,7 +236,10 @@ interface SocialPlatform {
   svgPath: string
 }
 
-const SOCIAL_PLATFORMS: Record<keyof OrganizationSocial, SocialPlatform> = {
+/** Only the account handles; featuredPosts is not a linkable platform. */
+type SocialPlatformKey = Exclude<keyof OrganizationSocial, 'featuredPosts'>
+
+const SOCIAL_PLATFORMS: Record<SocialPlatformKey, SocialPlatform> = {
   x: {
     label: 'X',
     baseUrl: 'https://x.com/',
@@ -283,7 +296,7 @@ function bareHandle(value: string): string {
  * Accepts a bare handle, an @handle, or a full URL.
  */
 export function buildSocialLinks(social: OrganizationSocial): SocialLink[] {
-  return (Object.keys(SOCIAL_PLATFORMS) as (keyof OrganizationSocial)[])
+  return (Object.keys(SOCIAL_PLATFORMS) as SocialPlatformKey[])
     .filter((key) => (social[key] ?? '').trim() !== '')
     .map((key) => {
       const platform = SOCIAL_PLATFORMS[key]

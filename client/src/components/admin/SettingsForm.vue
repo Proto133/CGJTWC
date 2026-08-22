@@ -79,6 +79,13 @@ function removeOffering(index: number) {
   form.value.content.offerings.splice(index, 1)
 }
 
+function addFeaturedPost() {
+  form.value.social.featuredPosts.push('')
+}
+function removeFeaturedPost(index: number) {
+  form.value.social.featuredPosts.splice(index, 1)
+}
+
 function addMailLine() {
   form.value.payment.mailingAddress.push('')
 }
@@ -204,9 +211,42 @@ function removeTier(index: number) {
           <div class="settings-note settings-note--inline">
             Handle or full URL. Leave empty to hide that account everywhere.
           </div>
-          <q-input v-model="form.social.x" label="X" outlined placeholder="CGJTWrestling" />
+          <q-input v-model="form.social.x" label="X" outlined placeholder="CaryTrojansWC" />
           <q-input v-model="form.social.facebook" label="Facebook" outlined />
           <q-input v-model="form.social.instagram" label="Instagram" outlined />
+
+          <div>
+            <div class="field-group-label">Featured posts on the home page</div>
+            <div class="settings-note settings-note--inline q-mb-sm">
+              Paste the link to a post. X often serves nothing for a profile
+              timeline on a new account, but individual posts embed reliably.
+              Listing any here replaces the timeline with those posts.
+            </div>
+            <div
+              v-for="(_, index) in form.social.featuredPosts"
+              :key="`post-${index}`"
+              class="row items-center no-wrap q-gutter-sm q-mb-sm"
+            >
+              <q-input
+                v-model="form.social.featuredPosts[index]"
+                outlined
+                dense
+                class="col"
+                :label="`Post ${index + 1}`"
+                placeholder="https://x.com/CaryTrojansWC/status/…"
+              />
+              <q-btn
+                flat
+                round
+                dense
+                icon="delete"
+                color="negative"
+                :aria-label="`Remove post ${index + 1}`"
+                @click="removeFeaturedPost(index)"
+              />
+            </div>
+            <q-btn flat dense no-caps icon="add" label="Add post" @click="addFeaturedPost" />
+          </div>
         </div>
       </q-expansion-item>
 

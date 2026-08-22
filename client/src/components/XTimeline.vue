@@ -13,15 +13,28 @@ const settings = useSettingsStore()
 
 // Falls back to the configured account, which an admin can change at runtime.
 const handle = computed(() => props.handle || settings.xHandle)
-const limit = props.limit || 4
 const brandIcon = computed(() => settings.xSocial?.svgPath ?? '')
+
+/**
+ * Admin-curated post URLs. When present these are shown instead of relying on
+ * the profile timeline, which X often serves empty for new or quiet accounts.
+ */
+const featuredPosts = computed(() =>
+  (settings.org.social.featuredPosts ?? []).filter((url) => url.trim() !== ''))
+
+const hasFeatured = computed(() => featuredPosts.value.length > 0)
 const loaded = ref(false)
 /** True when X did not actually render a timeline, so we show a link instead. */
 const unavailable = ref(false)
 const container = ref<HTMLElement | null>(null)
 let checkTimer: ReturnType<typeof setTimeout> | null = null
 
-const SCRIPT_SRC = 'https://platform.twitter.com/widgets.js'
+/**
+ * X's publish tool now hands out platform.x.com rather than the older
+ * platform.twitter.com. Both serve the same widget script, but matching the
+ * documented host removes one variable when embeds misbehave.
+ */
+const SCRIPT_SRC = 'https://platform.x.com/widgets.js'
 /** Generous: the widget does script load, iframe insert, then a data fetch. */
 const RENDER_GRACE_MS = 6000
 
@@ -33,6 +46,12 @@ const RENDER_GRACE_MS = 6000
  * so neither load events nor its contents can be inspected.
  */
 function checkRendered() {
+  // Featured posts render as their own iframes, so the timeline check does not
+  // apply and the fallback link is unnecessary.
+  if (hasFeatured.value) {
+    unavailable.value = false
+    return
+  }
   const iframe = container.value?.querySelector('iframe')
   const height = iframe?.getBoundingClientRect().height ?? 0
   unavailable.value = height < 40
@@ -95,21 +114,40 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
+    <!-- Curated posts take priority: single-post embeds are served reliably,
+         whereas the profile timeline often is not for a new account. -->
+    <div v-if="hasFeatured" class="x-posts">
+      <blockquote
+        v-for="url in featuredPosts"
+        :key="url"
+        class="twitter-tweet"
+        data-theme="light"
+        data-dnt="true"
+      >
+        <a :href="url">{{ url }}</a>
+      </blockquote>
+    </div>
+
     <!-- Official X Embedded Timeline. Hidden rather than removed when it fails,
          because the script owns this node once it has run. -->
-    <div v-show="!unavailable">
+    <div v-else v-show="!unavailable">
+      <!-- Markup mirrors what publish.x.com generates, including ref_src.
+           data-tweet-limit is deliberately omitted: it switches the widget into
+           a fixed-set mode rather than a timeline, which is another thing to go
+           wrong for no benefit here. -->
       <a
         class="twitter-timeline"
-        :data-height="320"
-        :data-tweet-limit="limit"
-        :href="`https://x.com/${handle}`"
+        data-lang="en"
         data-theme="light"
+        :data-height="320"
+        :href="`https://x.com/${handle}?ref_src=twsrc%5Etfw`"
       >
-        Tweets by @{{ handle }}
+        Posts by {{ handle }}
       </a>
     </div>
 
-    <div v-if="!loaded && !unavailable" class="text-caption text-center q-mt-sm text-grey">
+    <div v-if="!loaded && !unavailable && !hasFeatured"
+         class="text-caption text-center q-mt-sm text-grey">
       Loading latest posts...
     </div>
 
@@ -133,6 +171,10 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.x-posts :deep(.twitter-tweet) {
+  margin: 0 auto 12px;
+}
+
 .x-fallback {
   text-align: center;
   padding: 8px 0 4px;
