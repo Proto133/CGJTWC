@@ -14,6 +14,8 @@ const store = useRegistrationsStore()
 
 const statusFilter = ref<RegistrationStatus | 'all'>('all')
 const paymentFilter = ref<PaymentStatus | 'all'>('all')
+/** Free-text lookup, for "a parent rang and lost their reference code". */
+const search = ref('')
 const paymentDialogOpen = ref(false)
 const editingPayment = ref<Registration | null>(null)
 
@@ -53,13 +55,31 @@ const statusColors: Record<RegistrationStatus, string> = {
   registered: 'positive',
 }
 
-const filtered = computed(() => store.registrations.filter((r) => {
-  const byStatus = statusFilter.value === 'all' || r.status === statusFilter.value
-  // Registrations submitted before payment tracking have no payment block.
-  const payStatus = r.payment?.status ?? 'unpaid'
-  const byPayment = paymentFilter.value === 'all' || payStatus === paymentFilter.value
-  return byStatus && byPayment
-}))
+const filtered = computed(() => {
+  const term = search.value.trim().toLowerCase()
+
+  return store.registrations.filter((r) => {
+    const byStatus = statusFilter.value === 'all' || r.status === statusFilter.value
+    // Registrations submitted before payment tracking have no payment block.
+    const payStatus = r.payment?.status ?? 'unpaid'
+    const byPayment = paymentFilter.value === 'all' || payStatus === paymentFilter.value
+
+    // Match on the things someone would have to hand on a phone call.
+    const haystack = [
+      r.wrestler.firstName,
+      r.wrestler.lastName,
+      r.guardian.firstName,
+      r.guardian.lastName,
+      r.guardian.email,
+      r.guardian.phone,
+      r.payment?.reference,
+    ].filter(Boolean).join(' ').toLowerCase()
+
+    const bySearch = term === '' || haystack.includes(term)
+
+    return byStatus && byPayment && bySearch
+  })
+})
 
 const owed = computed(() => store.registrations
   .filter((r) => r.payment && r.payment.status !== 'paid' && r.payment.status !== 'waived')
@@ -145,6 +165,19 @@ function confirmDelete(reg: Registration) {
       </div>
     </div>
 
+    <q-input
+      v-model="search"
+      dense
+      outlined
+      clearable
+      class="q-mb-md"
+      placeholder="Search name, email, phone or reference code"
+    >
+      <template #prepend>
+        <q-icon name="search" />
+      </template>
+    </q-input>
+
     <div class="privacy-banner">
       <q-icon name="lock" size="16px" class="q-mr-xs" />
       These records contain a minor's date of birth and home address. They are
@@ -167,7 +200,23 @@ function confirmDelete(reg: Registration) {
               {{ reg.wrestler.firstName }} {{ reg.wrestler.lastName }}
               <span class="text-caption text-grey-6">· Grade {{ reg.wrestler.grade }}</span>
             </q-item-label>
-            <q-item-label caption>{{ submittedOn(reg) }}</q-item-label>
+            <q-item-label caption>
+              {{ submittedOn(reg) }}
+              <!-- Surfaced on the collapsed row so a lost code can be read out
+                   without expanding. Click copies; stop propagation so it does
+                   not toggle the row. -->
+              <template v-if="reg.payment?.reference">
+                ·
+                <button
+                  type="button"
+                  class="ref-chip"
+                  :title="`Copy ${reg.payment.reference}`"
+                  @click.stop="copyReference(reg.payment.reference)"
+                >
+                  {{ reg.payment.reference }}
+                </button>
+              </template>
+            </q-item-label>
           </q-item-section>
           <q-item-section side>
             <div class="row q-gutter-xs items-center">
@@ -237,16 +286,15 @@ function confirmDelete(reg: Registration) {
                 </div>
                 <div class="pay-ref">
                   <span class="pay-key">Reference</span>
-                  <code>{{ reg.payment.reference }}</code>
-                  <q-btn
-                    dense
-                    flat
-                    round
-                    size="sm"
-                    icon="content_copy"
+                  <button
+                    type="button"
+                    class="ref-code"
                     :aria-label="`Copy reference ${reg.payment.reference}`"
                     @click="copyReference(reg.payment.reference)"
-                  />
+                  >
+                    {{ reg.payment.reference }}
+                    <q-icon name="content_copy" size="14px" />
+                  </button>
                 </div>
                 <template v-if="reg.payment.status === 'paid'">
                   <div>
@@ -426,11 +474,40 @@ function confirmDelete(reg: Registration) {
   flex-wrap: wrap;
 }
 
-.pay-ref code {
+/* Both the chip and the detail code are buttons so the code itself is the
+   click target, not just an adjacent icon. */
+.ref-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: #fff;
   border: 1px solid var(--grey-200);
   border-radius: 4px;
-  padding: 1px 6px;
+  padding: 2px 8px;
+  font: inherit;
   font-weight: 600;
+  color: var(--navy-800);
+  cursor: pointer;
+}
+
+.ref-code:hover {
+  border-color: var(--navy-800);
+  background: var(--grey-050);
+}
+
+.ref-chip {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--navy-800);
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
+.ref-chip:hover {
+  text-decoration-style: solid;
 }
 </style>
