@@ -78,6 +78,27 @@ function addOffering() {
 function removeOffering(index: number) {
   form.value.content.offerings.splice(index, 1)
 }
+
+function addMailLine() {
+  form.value.payment.mailingAddress.push('')
+}
+function removeMailLine(index: number) {
+  form.value.payment.mailingAddress.splice(index, 1)
+}
+
+function addTier() {
+  form.value.payment.tiers.push({
+    // Stable key stored on registrations; generated once so renaming the label
+    // later does not orphan existing records.
+    id: `tier-${Date.now().toString(36)}`,
+    label: '',
+    amount: 0,
+    description: '',
+  })
+}
+function removeTier(index: number) {
+  form.value.payment.tiers.splice(index, 1)
+}
 </script>
 
 <template>
@@ -210,6 +231,125 @@ function removeOffering(index: number) {
 
       <q-separator />
 
+      <!-- Payment -->
+      <q-expansion-item label="Payment &amp; pricing" icon="payments">
+        <div class="q-pa-md q-gutter-md">
+          <div class="settings-note settings-note--inline">
+            Zelle has no API for confirming incoming payments, so registrations
+            are reconciled by hand. Each one gets a reference code for the memo;
+            an admin confirms it in the Registrations tab.
+          </div>
+
+          <q-input
+            v-model="form.payment.zelleTag"
+            label="Zelle tag or email"
+            outlined
+            hint="Shown to registrants who choose Zelle"
+          />
+          <q-input
+            v-model="form.payment.zelleQrImageUrl"
+            label="Zelle QR image URL (optional)"
+            outlined
+            hint="Paste the QR your banking app generates — a scannable Zelle QR cannot be generated here"
+          />
+
+          <q-input
+            v-model="form.payment.checkPayableTo"
+            label="Make checks payable to"
+            outlined
+          />
+
+          <div>
+            <div class="field-group-label">Mailing address for checks</div>
+            <div
+              v-for="(_, index) in form.payment.mailingAddress"
+              :key="`mail-${index}`"
+              class="row items-center no-wrap q-gutter-sm q-mb-sm"
+            >
+              <q-input
+                v-model="form.payment.mailingAddress[index]"
+                outlined
+                dense
+                class="col"
+                :label="`Line ${index + 1}`"
+              />
+              <q-btn
+                flat
+                round
+                dense
+                icon="delete"
+                color="negative"
+                :aria-label="`Remove address line ${index + 1}`"
+                @click="removeMailLine(index)"
+              />
+            </div>
+            <q-btn flat dense no-caps icon="add" label="Add line" @click="addMailLine" />
+          </div>
+
+          <q-input
+            v-model="form.payment.instructions"
+            type="textarea"
+            label="Payment instructions"
+            outlined
+            autogrow
+          />
+
+          <div>
+            <div class="field-group-label">Pricing tiers</div>
+            <div
+              v-for="(tier, index) in form.payment.tiers"
+              :key="tier.id"
+              class="tier-row"
+            >
+              <div class="row q-col-gutter-sm items-start">
+                <div class="col-12 col-sm-5">
+                  <q-input
+                    v-model="tier.label"
+                    outlined
+                    dense
+                    label="Label"
+                    placeholder="Early Registration"
+                  />
+                </div>
+                <div class="col-8 col-sm-3">
+                  <q-input
+                    v-model.number="tier.amount"
+                    type="number"
+                    outlined
+                    dense
+                    label="Amount"
+                    prefix="$"
+                    min="0"
+                  />
+                </div>
+                <div class="col-4 col-sm-4 text-right">
+                  <q-btn
+                    flat
+                    round
+                    dense
+                    icon="delete"
+                    color="negative"
+                    :aria-label="`Remove tier ${index + 1}`"
+                    @click="removeTier(index)"
+                  />
+                </div>
+                <div class="col-12">
+                  <q-input
+                    v-model="tier.description"
+                    outlined
+                    dense
+                    label="Description"
+                  />
+                </div>
+              </div>
+            </div>
+            <q-btn flat dense no-caps icon="add" label="Add tier" @click="addTier" />
+          </div>
+        </div>
+      </q-expansion-item>
+
+      <q-separator />
+
       <!-- Content -->
       <q-expansion-item label="Page copy" icon="article">
         <div class="q-pa-md q-gutter-md">
@@ -330,6 +470,13 @@ function removeOffering(index: number) {
   text-transform: uppercase;
   color: var(--grey-400);
   margin-bottom: 8px;
+}
+
+.tier-row {
+  border: 1px solid var(--grey-200);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  margin-bottom: 10px;
 }
 
 code {

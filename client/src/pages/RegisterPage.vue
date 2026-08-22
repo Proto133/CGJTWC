@@ -2,12 +2,26 @@
 import { ref, computed } from 'vue'
 import { useRegistrationsStore } from 'stores/registrations'
 import { useSettingsStore } from 'stores/settings'
+import { generatePaymentReference } from 'src/utils/reference'
+import type { PaymentMethod } from 'src/types'
 
 const registrations = useRegistrationsStore()
 const settings = useSettingsStore()
 const org = computed(() => settings.org)
+const pay = computed(() => settings.org.payment)
+
+/** Only tiers an admin has actually filled in. */
+const tiers = computed(() => pay.value.tiers.filter((t) => t.label.trim() !== ''))
+
+const methods: { value: PaymentMethod; label: string; icon: string }[] = [
+  { value: 'zelle', label: 'Zelle', icon: 'account_balance' },
+  { value: 'check', label: 'Check', icon: 'edit_note' },
+  { value: 'cash', label: 'Cash', icon: 'payments' },
+]
 
 const submitted = ref(false)
+/** Shown on the confirmation screen so the payer can put it in the memo. */
+const submittedReference = ref('')
 
 function emptyForm() {
   return {
@@ -15,6 +29,7 @@ function emptyForm() {
     guardian: { firstName: '', lastName: '', email: '', phone: '' },
     address: { street: '', city: '', state: '', postalCode: '' },
     emergency: { name: '', phone: '', relationship: '' },
+    payment: { method: 'zelle' as PaymentMethod, tierId: '' },
     notes: '',
   }
 }
@@ -31,8 +46,17 @@ const dobRule = (val: string) =>
 const emailRule = (val: string) =>
   /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(val) || 'Enter a valid email address'
 
+const selectedTier = computed(() =>
+  tiers.value.find((t) => t.id === form.value.payment.tierId) ?? null)
+
+const amountDue = computed(() => selectedTier.value?.amount ?? 0)
+
 async function handleSubmit() {
   const f = form.value
+  // Generated per submission; the payer writes it in the Zelle or cheque memo
+  // so an admin can match a bank statement line back to this registration.
+  const reference = generatePaymentReference()
+
   const ok = await registrations.submit({
     wrestler: {
       firstName: f.wrestler.firstName.trim(),
@@ -57,10 +81,18 @@ async function handleSubmit() {
       phone: f.emergency.phone.trim(),
       relationship: f.emergency.relationship.trim(),
     },
+    payment: {
+      method: f.payment.method,
+      tierId: f.payment.tierId,
+      // Snapshotted so a later price change does not rewrite what was owed.
+      amountDue: amountDue.value,
+      reference,
+    },
     ...(f.notes.trim() ? { notes: f.notes.trim() } : {}),
   })
 
   if (ok) {
+    submittedReference.value = reference
     submitted.value = true
     form.value = emptyForm()
   }
@@ -88,6 +120,21 @@ function startAnother() {
         <h2 class="confirm-title">Registration received</h2>
         <p class="confirm-text">
           Thanks! A coach will reach out using the contact details you provided.
+        </p>
+
+        <!-- The whole point of the reference code: it is how a payment gets
+             matched back to this registration, so make it hard to miss. -->
+        <div v-if="submittedReference" class="reference-box">
+          <div class="reference-box__label">Your payment reference</div>
+          <div class="reference-box__code">{{ submittedReference }}</div>
+          <p class="reference-box__hint">
+            Put this in the memo when you pay so we can match your payment to
+            your registration. Write it down — it is also in the email you used
+            to register if you need it again.
+          </p>
+        </div>
+
+        <p class="confirm-text">
           Questions in the meantime? Email
           <a :href="settings.mailtoHref">{{ org.contact.email }}</a>.
         </p>
@@ -259,6 +306,74 @@ function startAnother() {
 
           <q-separator class="q-my-md" />
 
+          <div class="form-section-title">Payment</div>
+
+          <div v-if="tiers.length" class="q-mb-md">
+            <q-option-group
+              v-model="form.payment.tierId"
+              type="radio"
+              :options="tiers.map((t) => ({
+                label: t.amount > 0 ? `${t.label} — $${t.amount}` : t.label,
+                value: t.id,
+              }))"
+              :rules="[required('A registration type')]"
+            />
+            <div v-if="selectedTier?.description" class="tier-hint">
+              {{ selectedTier.description }}
+            </div>
+          </div>
+          <div v-else class="empty-state q-mb-md">
+            Pricing has not been published yet. Submit your registration and a
+            coach will follow up with the fee.
+          </div>
+
+          <div class="field-label">How will you pay?</div>
+          <q-option-group
+            v-model="form.payment.method"
+            type="radio"
+            inline
+            :options="methods.map((m) => ({ label: m.label, value: m.value }))"
+          />
+
+          <!-- Method-specific instructions, all driven by admin settings. -->
+          <div class="pay-instructions">
+            <template v-if="form.payment.method === 'zelle'">
+              <div v-if="pay.zelleTag">
+                Send <strong v-if="amountDue">${{ amountDue }}</strong> by Zelle to
+                <strong>{{ pay.zelleTag }}</strong>.
+              </div>
+              <div v-else>Zelle details will be emailed to you.</div>
+              <img
+                v-if="pay.zelleQrImageUrl"
+                :src="pay.zelleQrImageUrl"
+                alt="Zelle QR code"
+                class="pay-qr"
+              />
+            </template>
+
+            <template v-else-if="form.payment.method === 'check'">
+              <div>
+                Make the check payable to <strong>{{ pay.checkPayableTo }}</strong>.
+              </div>
+              <div v-if="pay.mailingAddress.length" class="q-mt-xs">
+                Mail to:
+                <div v-for="line in pay.mailingAddress" :key="line">{{ line }}</div>
+              </div>
+            </template>
+
+            <template v-else>
+              <div>Bring cash to any practice and hand it to a coach.</div>
+            </template>
+
+            <div v-if="pay.instructions" class="q-mt-sm">{{ pay.instructions }}</div>
+            <div class="pay-note">
+              You will get a reference code to include in the memo after you submit.
+              Payment is confirmed by an admin once it arrives.
+            </div>
+          </div>
+
+          <q-separator class="q-my-md" />
+
           <q-input
             v-model="form.notes"
             type="textarea"
@@ -316,5 +431,78 @@ function startAnother() {
   font-size: 0.8rem;
   color: var(--grey-400);
   text-align: center;
+}
+
+.field-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--grey-600);
+  margin-bottom: 4px;
+}
+
+.tier-hint {
+  font-size: 0.85rem;
+  color: var(--grey-500);
+  margin-top: 4px;
+}
+
+.pay-instructions {
+  background: var(--grey-050);
+  border: 1px solid var(--grey-200);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-top: 10px;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: var(--grey-600);
+  overflow-wrap: anywhere;
+}
+
+.pay-qr {
+  display: block;
+  margin-top: 10px;
+  width: 160px;
+  height: auto;
+  border-radius: var(--radius-sm);
+}
+
+.pay-note {
+  margin-top: 8px;
+  font-size: 0.82rem;
+  color: var(--grey-400);
+}
+
+.reference-box {
+  border: 1px dashed var(--navy-800);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin: 0 auto 20px;
+  max-width: 420px;
+  background: var(--grey-050);
+}
+
+.reference-box__label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.76rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--grey-400);
+}
+
+.reference-box__code {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(1.7rem, 6vw, 2.2rem);
+  letter-spacing: 0.08em;
+  color: var(--navy-800);
+  margin: 6px 0 8px;
+}
+
+.reference-box__hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--grey-600);
+  line-height: 1.55;
 }
 </style>

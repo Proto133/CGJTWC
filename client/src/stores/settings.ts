@@ -56,6 +56,7 @@ export const useSettingsStore = defineStore('settings', () => {
     location: mergeSection(defaultOrganization.location, override.value?.location),
     social: mergeSection(defaultOrganization.social, override.value?.social),
     program: mergeSection(defaultOrganization.program, override.value?.program),
+    payment: mergeSection(defaultOrganization.payment, override.value?.payment),
     content: mergeSection(defaultOrganization.content, override.value?.content),
   }))
 

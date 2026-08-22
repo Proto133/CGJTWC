@@ -11,10 +11,15 @@ import {
   query,
   orderBy,
 } from 'firebase/firestore'
-import { db } from 'src/firebase'
+import { db, auth } from 'src/firebase'
 import { Notify } from 'quasar'
 import { errorMessage } from 'src/utils/errors'
-import type { Registration, RegistrationFormPayload, RegistrationStatus } from 'src/types'
+import type {
+  Registration,
+  RegistrationFormPayload,
+  RegistrationStatus,
+  PaymentConfirmationInput,
+} from 'src/types'
 
 export const useRegistrationsStore = defineStore('registrations', () => {
   /**
@@ -24,6 +29,8 @@ export const useRegistrationsStore = defineStore('registrations', () => {
   const registrations = ref<Registration[]>([])
   const loading = ref(false)
   const submitting = ref(false)
+  /** Id of the registration currently being written to, for per-row spinners. */
+  const working = ref<string | null>(null)
   let unsubscribe: (() => void) | null = null
 
   /** Admin-only. Newest first. */
@@ -69,6 +76,12 @@ export const useRegistrationsStore = defineStore('registrations', () => {
         guardian: payload.guardian,
         address: payload.address,
         emergency: payload.emergency,
+        payment: {
+          ...payload.payment,
+          // Rules reject any other value here: a registrant cannot declare
+          // themselves paid, only an admin can, and only with confirmation detail.
+          status: 'unpaid',
+        },
         ...(payload.notes ? { notes: payload.notes } : {}),
         // Rules require exactly this value on create; only admins can advance it.
         status: 'new',
@@ -84,6 +97,44 @@ export const useRegistrationsStore = defineStore('registrations', () => {
       return false
     } finally {
       submitting.value = false
+    }
+  }
+
+  /**
+   * Records or clears a payment.
+   *
+   * Uses dotted field paths so the registrant-supplied part of the payment map
+   * (method, tier, amount due, reference) is preserved. Security rules refuse a
+   * 'paid' status without a confirmation reference, a positive amount and a
+   * received date, so the identifying detail cannot be omitted.
+   */
+  async function recordPayment(id: string, input: PaymentConfirmationInput) {
+    working.value = id
+    try {
+      const settled = input.status === 'paid'
+
+      await updateDoc(doc(db, 'registrations', id), {
+        'payment.status': input.status,
+        'payment.confirmationRef': input.confirmationRef.trim(),
+        'payment.amountReceived': input.amountReceived,
+        'payment.receivedAt': input.receivedAt,
+        ...(input.depositedAt ? { 'payment.depositedAt': input.depositedAt } : {}),
+        ...(input.notes ? { 'payment.notes': input.notes } : {}),
+        // Who signed off, for the audit trail.
+        'payment.confirmedBy': settled ? (auth.currentUser?.email ?? 'unknown') : '',
+        'payment.confirmedAt': serverTimestamp(),
+      })
+
+      Notify.create({ type: 'positive', message: `Payment marked ${input.status}` })
+      return true
+    } catch (error: unknown) {
+      Notify.create({
+        type: 'negative',
+        message: errorMessage(error, 'Failed to record the payment'),
+      })
+      return false
+    } finally {
+      working.value = null
     }
   }
 
@@ -119,9 +170,11 @@ export const useRegistrationsStore = defineStore('registrations', () => {
     registrations,
     loading,
     submitting,
+    working,
     subscribe,
     unsubscribeFromRegistrations,
     submit,
+    recordPayment,
     setStatus,
     remove,
   }

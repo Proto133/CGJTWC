@@ -97,6 +97,52 @@ export interface StaffFormPayload {
 
 export type RegistrationStatus = 'new' | 'contacted' | 'registered'
 
+export type PaymentMethod = 'zelle' | 'check' | 'cash'
+
+export type PaymentStatus = 'unpaid' | 'pending' | 'paid' | 'waived'
+
+/**
+ * Payment tracking for a registration.
+ *
+ * The first block is supplied by the registrant. The confirmation block is
+ * admin-only and is what makes a payment auditable: security rules refuse to
+ * set `status` to 'paid' without a confirmation reference, a positive amount
+ * and a received date, so a payment can never be marked settled without the
+ * identifying detail needed to find it on a bank statement later.
+ */
+export interface RegistrationPayment {
+  method: PaymentMethod
+  /** Matches a PricingTier id in the organization settings. */
+  tierId: string
+  /** Whole dollars, snapshotted at submit so later price changes do not rewrite history. */
+  amountDue: number
+  /** Short code the payer puts in the Zelle or cheque memo, e.g. TWC-4F2K9. */
+  reference: string
+  status: PaymentStatus
+
+  // ----- admin-only confirmation detail -----
+  /** Cheque number, Zelle confirmation number, or cash receipt number. */
+  confirmationRef?: string
+  amountReceived?: number
+  /** YYYY/MM/DD */
+  receivedAt?: string
+  /** YYYY/MM/DD, cheques only. */
+  depositedAt?: string
+  confirmedBy?: string
+  confirmedAt?: Timestamp
+  notes?: string
+}
+
+/** The identifying detail an admin must supply to confirm a payment. */
+export interface PaymentConfirmationInput {
+  status: PaymentStatus
+  confirmationRef: string
+  amountReceived: number
+  receivedAt: string
+  depositedAt?: string
+  notes?: string
+}
+
 export interface RegistrationWrestler {
   firstName: string
   lastName: string
@@ -135,9 +181,19 @@ export interface Registration {
   guardian: RegistrationGuardian
   address: RegistrationAddress
   emergency: RegistrationEmergency
+  payment: RegistrationPayment
   notes?: string
   status: RegistrationStatus
   createdAt: Timestamp
+}
+
+/** The payment fields a registrant may set. Everything else is admin-only. */
+export interface RegistrationPaymentInput {
+  method: PaymentMethod
+  tierId: string
+  amountDue: number
+  /** Generated at submit; goes in the payment memo. */
+  reference: string
 }
 
 export interface RegistrationFormPayload {
@@ -145,6 +201,7 @@ export interface RegistrationFormPayload {
   guardian: RegistrationGuardian
   address: RegistrationAddress
   emergency: RegistrationEmergency
+  payment: RegistrationPaymentInput
   notes?: string
 }
 

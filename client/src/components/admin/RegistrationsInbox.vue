@@ -1,12 +1,51 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Dialog, date } from 'quasar'
+import { Dialog, date, copyToClipboard, Notify } from 'quasar'
 import { useRegistrationsStore } from 'stores/registrations'
-import type { Registration, RegistrationStatus } from 'src/types'
+import PaymentDialog from 'components/admin/PaymentDialog.vue'
+import type {
+  Registration,
+  RegistrationStatus,
+  PaymentStatus,
+  PaymentConfirmationInput,
+} from 'src/types'
 
 const store = useRegistrationsStore()
 
 const statusFilter = ref<RegistrationStatus | 'all'>('all')
+const paymentFilter = ref<PaymentStatus | 'all'>('all')
+const paymentDialogOpen = ref(false)
+const editingPayment = ref<Registration | null>(null)
+
+const paymentColors: Record<PaymentStatus, string> = {
+  unpaid: 'grey-6',
+  pending: 'warning',
+  paid: 'positive',
+  waived: 'grey-7',
+}
+
+const methodLabels: Record<string, string> = {
+  zelle: 'Zelle',
+  check: 'Check',
+  cash: 'Cash',
+}
+
+function openPaymentDialog(reg: Registration) {
+  editingPayment.value = reg
+  paymentDialogOpen.value = true
+}
+
+async function savePayment(input: PaymentConfirmationInput) {
+  const reg = editingPayment.value
+  if (!reg) return
+  const ok = await store.recordPayment(reg.id, input)
+  if (ok) paymentDialogOpen.value = false
+}
+
+async function copyReference(reference: string) {
+  await copyToClipboard(reference)
+  Notify.create({ type: 'info', message: `Copied ${reference}` })
+}
 
 const statusColors: Record<RegistrationStatus, string> = {
   new: 'primary',
@@ -14,10 +53,21 @@ const statusColors: Record<RegistrationStatus, string> = {
   registered: 'positive',
 }
 
-const filtered = computed(() =>
-  statusFilter.value === 'all'
-    ? store.registrations
-    : store.registrations.filter((r) => r.status === statusFilter.value))
+const filtered = computed(() => store.registrations.filter((r) => {
+  const byStatus = statusFilter.value === 'all' || r.status === statusFilter.value
+  // Registrations submitted before payment tracking have no payment block.
+  const payStatus = r.payment?.status ?? 'unpaid'
+  const byPayment = paymentFilter.value === 'all' || payStatus === paymentFilter.value
+  return byStatus && byPayment
+}))
+
+const owed = computed(() => store.registrations
+  .filter((r) => r.payment && r.payment.status !== 'paid' && r.payment.status !== 'waived')
+  .reduce((sum, r) => sum + (r.payment?.amountDue ?? 0), 0))
+
+const collected = computed(() => store.registrations
+  .filter((r) => r.payment?.status === 'paid')
+  .reduce((sum, r) => sum + (r.payment?.amountReceived ?? 0), 0))
 
 const counts = computed(() => ({
   all: store.registrations.length,
@@ -70,6 +120,31 @@ function confirmDelete(reg: Registration) {
       />
     </div>
 
+    <div class="row items-center q-mb-md q-gutter-sm">
+      <q-btn-toggle
+        v-model="paymentFilter"
+        no-caps
+        unelevated
+        dense
+        toggle-color="primary"
+        text-color="primary"
+        color="white"
+        class="status-toggle"
+        :options="[
+          { label: 'Any payment', value: 'all' },
+          { label: 'Unpaid', value: 'unpaid' },
+          { label: 'Pending', value: 'pending' },
+          { label: 'Paid', value: 'paid' },
+          { label: 'Waived', value: 'waived' },
+        ]"
+      />
+      <q-space />
+      <div class="totals">
+        <span class="totals__item">Collected <strong>${{ collected }}</strong></span>
+        <span class="totals__item">Outstanding <strong>${{ owed }}</strong></span>
+      </div>
+    </div>
+
     <div class="privacy-banner">
       <q-icon name="lock" size="16px" class="q-mr-xs" />
       These records contain a minor's date of birth and home address. They are
@@ -95,9 +170,18 @@ function confirmDelete(reg: Registration) {
             <q-item-label caption>{{ submittedOn(reg) }}</q-item-label>
           </q-item-section>
           <q-item-section side>
-            <q-badge :color="statusColors[reg.status]" class="status-badge">
-              {{ reg.status }}
-            </q-badge>
+            <div class="row q-gutter-xs items-center">
+              <q-badge
+                v-if="reg.payment"
+                :color="paymentColors[reg.payment.status]"
+                class="status-badge"
+              >
+                {{ reg.payment.status }}
+              </q-badge>
+              <q-badge :color="statusColors[reg.status]" class="status-badge">
+                {{ reg.status }}
+              </q-badge>
+            </div>
           </q-item-section>
         </template>
 
@@ -137,9 +221,77 @@ function confirmDelete(reg: Registration) {
               <div class="detail__label">Notes</div>
               <div class="detail__notes">{{ reg.notes }}</div>
             </div>
+
+            <!-- Payment. The reference is the key to matching a bank statement
+                 line back to this registration, so it gets a copy button. -->
+            <div v-if="reg.payment" class="col-12">
+              <div class="detail__label">Payment</div>
+              <div class="pay-grid">
+                <div>
+                  <span class="pay-key">Method</span>
+                  {{ methodLabels[reg.payment.method] ?? reg.payment.method }}
+                </div>
+                <div>
+                  <span class="pay-key">Amount due</span>
+                  ${{ reg.payment.amountDue }}
+                </div>
+                <div class="pay-ref">
+                  <span class="pay-key">Reference</span>
+                  <code>{{ reg.payment.reference }}</code>
+                  <q-btn
+                    dense
+                    flat
+                    round
+                    size="sm"
+                    icon="content_copy"
+                    :aria-label="`Copy reference ${reg.payment.reference}`"
+                    @click="copyReference(reg.payment.reference)"
+                  />
+                </div>
+                <template v-if="reg.payment.status === 'paid'">
+                  <div>
+                    <span class="pay-key">Confirmation</span>
+                    {{ reg.payment.confirmationRef }}
+                  </div>
+                  <div>
+                    <span class="pay-key">Received</span>
+                    ${{ reg.payment.amountReceived }} on {{ reg.payment.receivedAt }}
+                  </div>
+                  <div v-if="reg.payment.depositedAt">
+                    <span class="pay-key">Deposited</span>
+                    {{ reg.payment.depositedAt }}
+                  </div>
+                  <div v-if="reg.payment.confirmedBy">
+                    <span class="pay-key">Confirmed by</span>
+                    {{ reg.payment.confirmedBy }}
+                  </div>
+                </template>
+                <div v-if="reg.payment.notes" class="pay-full">
+                  <span class="pay-key">Payment notes</span>
+                  {{ reg.payment.notes }}
+                </div>
+              </div>
+            </div>
+            <div v-else class="col-12">
+              <div class="detail__label">Payment</div>
+              <div class="text-grey-6">
+                Submitted before payment tracking was added.
+              </div>
+            </div>
           </div>
 
           <div class="row items-center q-gutter-sm q-mt-md">
+            <q-btn
+              v-if="reg.payment"
+              dense
+              unelevated
+              no-caps
+              color="primary"
+              icon="payments"
+              label="Record payment"
+              :loading="store.working === reg.id"
+              @click="openPaymentDialog(reg)"
+            />
             <q-btn
               v-if="reg.status !== 'contacted'"
               dense
@@ -173,6 +325,13 @@ function confirmDelete(reg: Registration) {
         </div>
       </q-expansion-item>
     </q-list>
+
+    <PaymentDialog
+      v-model="paymentDialogOpen"
+      :registration="editingPayment"
+      :loading="store.working === editingPayment?.id"
+      @save="savePayment"
+    />
   </div>
 </template>
 
@@ -226,5 +385,52 @@ function confirmDelete(reg: Registration) {
 .detail__notes {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.totals {
+  display: flex;
+  gap: 14px;
+  font-size: 0.85rem;
+  color: var(--grey-600);
+  flex-wrap: wrap;
+}
+
+.totals__item strong {
+  color: var(--navy-800);
+}
+
+.pay-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 6px 16px;
+}
+
+.pay-full {
+  grid-column: 1 / -1;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.pay-key {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--grey-400);
+}
+
+.pay-ref {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pay-ref code {
+  background: #fff;
+  border: 1px solid var(--grey-200);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-weight: 600;
 }
 </style>

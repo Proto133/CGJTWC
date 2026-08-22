@@ -42,7 +42,10 @@ service cloud.firestore {
     // admin can ever read, change or delete a submission.
     match /registrations/{registrationId} {
       allow create: if isValidRegistration();
-      allow read, update, delete: if isAdmin();
+      allow read, delete: if isAdmin();
+      // Confirming a payment must carry identifying detail, so the audit trail
+      // cannot be skipped even by a buggy or malicious client.
+      allow update: if isAdmin() && isValidRegistrationUpdate();
     }
 
     // ============ ADMIN ACCESS CONTROL ============
@@ -106,7 +109,8 @@ service cloud.firestore {
     function isValidSettings() {
       let d = request.resource.data;
       return d.keys().hasOnly(['identity', 'contact', 'location', 'social',
-                               'program', 'content', 'updatedAt'])
+                               'program', 'payment', 'content', 'updatedAt'])
+             && (!('payment' in d.keys()) || d.payment is map)
              && (!('identity' in d.keys()) || d.identity is map)
              && (!('contact' in d.keys()) || d.contact is map)
              && (!('location' in d.keys()) || d.location is map)
@@ -121,17 +125,74 @@ service cloud.firestore {
     function isValidRegistration() {
       let d = request.resource.data;
       return d.keys().hasOnly(['wrestler', 'guardian', 'address', 'emergency',
-                               'notes', 'status', 'createdAt'])
+                               'payment', 'notes', 'status', 'createdAt'])
              && d.keys().hasAll(['wrestler', 'guardian', 'address', 'emergency',
-                                 'status', 'createdAt'])
+                                 'payment', 'status', 'createdAt'])
              && validWrestler(d.wrestler)
              && validGuardian(d.guardian)
              && validAddress(d.address)
              && validEmergency(d.emergency)
+             && validNewPayment(d.payment)
              && (!('notes' in d.keys()) || (d.notes is string && d.notes.size() <= 2000))
              // A submission always starts as 'new'; only admins can advance it.
              && d.status == 'new'
              && d.createdAt == request.time;
+    }
+
+    // What a registrant may declare about payment: their chosen method, the
+    // tier they picked and its price, plus the memo reference. Crucially the
+    // key whitelist excludes every confirmation field, so nobody can submit a
+    // registration that claims to already be paid or invent a cheque number.
+    function validNewPayment(p) {
+      return p is map
+             && p.keys().hasOnly(['method', 'tierId', 'amountDue', 'reference', 'status'])
+             && p.keys().hasAll(['method', 'tierId', 'amountDue', 'reference', 'status'])
+             && p.method in ['zelle', 'check', 'cash']
+             && p.tierId is string && p.tierId.size() > 0 && p.tierId.size() <= 40
+             && p.amountDue is number && p.amountDue >= 0 && p.amountDue <= 10000
+             && p.reference is string && p.reference.matches('^[A-Z]{2,6}-[A-Z0-9]{4,8}$')
+             // Only an admin can move a payment off 'unpaid'.
+             && p.status == 'unpaid';
+    }
+
+    // Admin updates. Registrant-supplied identity blocks are immutable, and a
+    // payment may only be marked 'paid' with the detail needed to trace it.
+    function isValidRegistrationUpdate() {
+      let d = request.resource.data;
+      let prior = resource.data;
+      return d.wrestler == prior.wrestler
+             && d.guardian == prior.guardian
+             && d.address == prior.address
+             && d.emergency == prior.emergency
+             && d.createdAt == prior.createdAt
+             && d.status in ['new', 'contacted', 'registered']
+             // Registrations submitted before payment tracking existed have no
+             // payment block; they must stay editable.
+             && (!('payment' in d.keys()) || validAdminPayment(d.payment));
+    }
+
+    function validAdminPayment(p) {
+      return p is map
+             && p.keys().hasOnly(['method', 'tierId', 'amountDue', 'reference', 'status',
+                                  'confirmationRef', 'amountReceived', 'receivedAt',
+                                  'depositedAt', 'confirmedBy', 'confirmedAt', 'notes'])
+             && p.method in ['zelle', 'check', 'cash']
+             && p.status in ['unpaid', 'pending', 'paid', 'waived']
+             && p.reference is string
+             // A settled payment must be traceable: some identifying reference,
+             // a positive amount, and the date it arrived.
+             && (p.status != 'paid' || (
+                  p.confirmationRef is string && p.confirmationRef.size() > 0
+                  && p.confirmationRef.size() <= 60
+                  && p.amountReceived is number && p.amountReceived > 0
+                  && p.receivedAt is string
+                  && p.receivedAt.matches('^[0-9]{4}/[0-9]{2}/[0-9]{2}$')
+                ))
+             && (!('depositedAt' in p.keys()) || (
+                  p.depositedAt is string
+                  && p.depositedAt.matches('^[0-9]{4}/[0-9]{2}/[0-9]{2}$')
+                ))
+             && (!('notes' in p.keys()) || (p.notes is string && p.notes.size() <= 2000));
     }
 
     function validWrestler(w) {
