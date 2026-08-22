@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { copyToClipboard, Notify } from 'quasar'
 import { useRegistrationsStore } from 'stores/registrations'
 import { useSettingsStore } from 'stores/settings'
 import { generatePaymentReference } from 'src/utils/reference'
@@ -101,6 +102,26 @@ async function handleSubmit() {
 function startAnother() {
   submitted.value = false
 }
+
+/**
+ * The code is the only thing tying a payment back to this registration, so make
+ * it a single tap to get into a Zelle memo rather than something to transcribe.
+ */
+async function copyReference() {
+  try {
+    await copyToClipboard(submittedReference.value)
+    Notify.create({
+      type: 'positive',
+      message: `Copied ${submittedReference.value} to your clipboard`,
+    })
+  } catch {
+    // Clipboard access can be blocked (insecure context, or denied permission).
+    Notify.create({
+      type: 'warning',
+      message: 'Could not copy automatically — please write the code down.',
+    })
+  }
+}
 </script>
 
 <template>
@@ -126,11 +147,22 @@ function startAnother() {
              matched back to this registration, so make it hard to miss. -->
         <div v-if="submittedReference" class="reference-box">
           <div class="reference-box__label">Your payment reference</div>
-          <div class="reference-box__code">{{ submittedReference }}</div>
+          <button type="button" class="reference-box__code" @click="copyReference">
+            {{ submittedReference }}
+            <q-icon name="content_copy" size="20px" />
+          </button>
+          <q-btn
+            flat
+            dense
+            no-caps
+            color="primary"
+            icon="content_copy"
+            label="Copy code"
+            @click="copyReference"
+          />
           <p class="reference-box__hint">
             Put this in the memo when you pay so we can match your payment to
-            your registration. Write it down — it is also in the email you used
-            to register if you need it again.
+            your registration. If you lose it, contact us and we can look it up.
           </p>
         </div>
 
@@ -491,12 +523,24 @@ function startAnother() {
 }
 
 .reference-box__code {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   font-family: var(--font-display);
   font-weight: 700;
   font-size: clamp(1.7rem, 6vw, 2.2rem);
   letter-spacing: 0.08em;
   color: var(--navy-800);
-  margin: 6px 0 8px;
+  margin: 6px 0 4px;
+  padding: 4px 12px;
+  background: #fff;
+  border: 1px solid var(--grey-200);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.reference-box__code:hover {
+  border-color: var(--navy-800);
 }
 
 .reference-box__hint {
