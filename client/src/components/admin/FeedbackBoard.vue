@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { Dialog, date } from 'quasar'
+import { Dialog, date, copyToClipboard, Notify } from 'quasar'
 import { useTicketsStore } from 'stores/tickets'
 import { useAuthStore } from 'stores/auth'
 import TicketDialog from 'components/admin/TicketDialog.vue'
@@ -60,6 +60,36 @@ async function postComment(ticketId: string) {
   if (!body) return
   const ok = await tickets.addComment(ticketId, body)
   if (ok) drafts.value = { ...drafts.value, [ticketId]: '' }
+}
+
+/**
+ * A ticket as plain text, for pasting somewhere else.
+ *
+ * Front-loads type, title and the page it was reported from, since that is the
+ * context anyone picking the ticket up needs first.
+ */
+function ticketAsText(ticket: Ticket): string {
+  const lines = [
+    `[${ticket.type.toUpperCase()}] ${ticket.title}`,
+    `Priority: ${ticket.priority} · Status: ${ticket.status}`,
+  ]
+
+  if (ticket.pageUrl) lines.push(`Reported from: ${ticket.pageUrl}`)
+  lines.push(`Filed by ${displayName(ticket.createdByEmail)} on ${when(ticket.createdAt)}`)
+  if (ticket.description) lines.push('', ticket.description)
+
+  return lines.join('\n')
+}
+
+async function copyTicket(ticket: Ticket) {
+  try {
+    await copyToClipboard(ticketAsText(ticket))
+    Notify.create({ type: 'info', message: 'Ticket copied to clipboard' })
+  } catch {
+    // Clipboard access needs user activation and a secure context; if the
+    // browser refuses, say so rather than leaving them to paste nothing.
+    Notify.create({ type: 'negative', message: 'Could not access the clipboard' })
+  }
 }
 
 function confirmDeleteTicket(ticket: Ticket) {
@@ -145,6 +175,18 @@ function confirmDeleteTicket(ticket: Ticket) {
           </q-item-section>
           <q-item-section side>
             <div class="row q-gutter-xs items-center">
+              <!-- click.stop, otherwise copying also toggles the panel. -->
+              <q-btn
+                dense
+                flat
+                round
+                size="sm"
+                icon="content_copy"
+                aria-label="Copy ticket to clipboard"
+                @click.stop="copyTicket(ticket)"
+              >
+                <q-tooltip>Copy as text</q-tooltip>
+              </q-btn>
               <q-badge
                 v-if="ticket.priority === 'high'"
                 :color="priorityColors[ticket.priority]"
