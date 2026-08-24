@@ -2,8 +2,10 @@
 import { ref, computed } from 'vue'
 import { Notify } from 'quasar'
 import { useSettingsStore } from 'stores/settings'
+import { useContactMessagesStore } from 'stores/contactMessages'
 
 const settings = useSettingsStore()
+const contactMessages = useContactMessagesStore()
 const org = computed(() => settings.org)
 const socialLinks = computed(() => settings.socialLinks)
 const mailtoHref = computed(() => settings.mailtoHref)
@@ -14,19 +16,44 @@ const form = ref({
   email: '',
   message: '',
 })
-const sending = ref(false)
 
-function submitContact() {
-  sending.value = true
-  // Placeholder - in real life you would call a Firebase Function or EmailJS here
-  setTimeout(() => {
+/**
+ * Honeypot. Hidden from people but not from most bots, which fill in every
+ * field they find. A submission with this set is dropped without a write.
+ * Cheap first line of defence on an endpoint anyone can post to.
+ */
+const website = ref('')
+
+const sending = computed(() => contactMessages.sending)
+
+async function submitContact() {
+  if (website.value !== '') {
+    // Pretend it worked rather than telling a bot why it failed.
+    form.value = { name: '', email: '', message: '' }
+    return
+  }
+
+  const sent = await contactMessages.submit(form.value)
+
+  if (sent) {
     Notify.create({
       type: 'positive',
-      message: 'Thank you! Your message has been received. We will reply within 48 hours.',
+      message: 'Thanks! Your message has been sent and a club admin will get back to you.',
+      timeout: 6000,
     })
     form.value = { name: '', email: '', message: '' }
-    sending.value = false
-  }, 600)
+    return
+  }
+
+  // Never claim success on failure: the sender needs to know to try the email
+  // address instead, rather than waiting for a reply that will never come.
+  Notify.create({
+    type: 'negative',
+    timeout: 12000,
+    message:
+      `Sorry, your message could not be sent. Please email us directly at ` +
+      `${org.value.contact.email}.`,
+  })
 }
 </script>
 
@@ -41,8 +68,23 @@ function submitContact() {
 
       <q-card flat bordered class="q-pa-md">
         <q-form @submit.prevent="submitContact" class="q-gutter-md">
-          <q-input v-model="form.name" label="Your Name" required outlined />
-          <q-input v-model="form.email" type="email" label="Email Address" required outlined />
+          <q-input
+            v-model="form.name"
+            label="Your Name"
+            required
+            outlined
+            maxlength="100"
+            :disable="sending"
+          />
+          <q-input
+            v-model="form.email"
+            type="email"
+            label="Email Address"
+            required
+            outlined
+            maxlength="200"
+            :disable="sending"
+          />
           <q-input
             v-model="form.message"
             type="textarea"
@@ -50,6 +92,20 @@ function submitContact() {
             autogrow
             required
             outlined
+            maxlength="5000"
+            :disable="sending"
+          />
+
+          <!-- Honeypot: hidden from people, tempting to bots. Not a q-input so
+               nothing about it looks like a real field to a scraper. -->
+          <input
+            v-model="website"
+            class="hp-field"
+            type="text"
+            name="website"
+            tabindex="-1"
+            autocomplete="off"
+            aria-hidden="true"
           />
 
           <q-btn
@@ -106,6 +162,16 @@ function submitContact() {
 </template>
 
 <style scoped>
+/* Hidden without display:none, which some bots skip over. */
+.hp-field {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .info-tile {
   border: 1px solid var(--grey-200);
   border-radius: var(--radius-md);

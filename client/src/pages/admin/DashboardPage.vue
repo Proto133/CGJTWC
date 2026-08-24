@@ -8,6 +8,7 @@ import { useAccessRequestsStore } from 'stores/accessRequests'
 import { useTicketsStore } from 'stores/tickets'
 import { useVaultStore } from 'stores/vault'
 import { useXMentionsStore } from 'stores/xMentions'
+import { useContactMessagesStore } from 'stores/contactMessages'
 import { useAuthStore } from 'stores/auth'
 import EventForm from 'components/admin/EventForm.vue'
 import AnnouncementForm from 'components/admin/AnnouncementForm.vue'
@@ -18,6 +19,7 @@ import AccessRequestsInbox from 'components/admin/AccessRequestsInbox.vue'
 import FeedbackBoard from 'components/admin/FeedbackBoard.vue'
 import AccountsVault from 'components/admin/AccountsVault.vue'
 import MentionsQueue from 'components/admin/MentionsQueue.vue'
+import MessagesInbox from 'components/admin/MessagesInbox.vue'
 import type {
   Event,
   Announcement,
@@ -33,6 +35,7 @@ type Tab =
   | 'announcements'
   | 'staff'
   | 'registrations'
+  | 'messages'
   | 'access'
   | 'mentions'
   | 'feedback'
@@ -49,6 +52,7 @@ const accessRequestsStore = useAccessRequestsStore()
 const ticketsStore = useTicketsStore()
 const vaultStore = useVaultStore()
 const mentionsStore = useXMentionsStore()
+const messagesStore = useContactMessagesStore()
 const authStore = useAuthStore()
 
 // Form state
@@ -71,6 +75,7 @@ onMounted(() => {
   // Reads the whole mentions collection, including unapproved ones, which the
   // rules only permit for an admin.
   mentionsStore.subscribeQueue()
+  messagesStore.subscribe()
 })
 
 onUnmounted(() => {
@@ -81,6 +86,7 @@ onUnmounted(() => {
   accessRequestsStore.unsubscribeFromAccessRequests()
   ticketsStore.unsubscribeFromTickets()
   mentionsStore.unsubscribeFromXMentions()
+  messagesStore.unsubscribeFromContactMessages()
   // Also discards the decryption key.
   vaultStore.unsubscribeFromVault()
 })
@@ -221,6 +227,17 @@ function confirmDeleteStaff(member: StaffMember) {
           class="q-ml-sm"
         >
           {{ registrationsStore.registrations.length }}
+        </q-badge>
+      </q-tab>
+      <q-tab name="messages" icon="mail">
+        <span class="q-ml-sm">Messages</span>
+        <q-badge
+          v-if="messagesStore.newMessages.length"
+          color="warning"
+          text-color="dark"
+          class="q-ml-sm"
+        >
+          {{ messagesStore.newMessages.length }}
         </q-badge>
       </q-tab>
       <q-tab name="access" icon="key">
@@ -467,6 +484,11 @@ function confirmDeleteStaff(member: StaffMember) {
       <!-- REGISTRATIONS -->
       <q-tab-panel name="registrations" class="q-px-none">
         <RegistrationsInbox />
+      </q-tab-panel>
+
+      <!-- CONTACT MESSAGES -->
+      <q-tab-panel name="messages" class="q-px-none">
+        <MessagesInbox />
       </q-tab-panel>
 
       <!-- ACCESS REQUESTS -->

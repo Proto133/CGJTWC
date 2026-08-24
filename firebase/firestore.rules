@@ -69,6 +69,18 @@ service cloud.firestore {
       allow update: if isAdmin() && isValidRegistrationUpdate();
     }
 
+    // ============ CONTACT FORM MESSAGES ============
+    // Same shape as registrations: anyone may send one, nobody but an admin can
+    // read them. Kept separate from `tickets` because tickets require an
+    // authenticated admin to create, and relaxing that would let anyone write
+    // into the internal tracker.
+    match /contactMessages/{messageId} {
+      allow create: if isValidContactMessage();
+      allow read, delete: if isAdmin();
+      // Any admin can triage; there is deliberately no owner gate here.
+      allow update: if isAdmin() && isValidContactUpdate();
+    }
+
     // ============ BUG REPORTS / FEATURE REQUESTS ============
     // Entirely internal: every operation requires an admin. Status is owner-only
     // so the backlog has a single decision maker, while any admin can file and
@@ -136,6 +148,39 @@ service cloud.firestore {
       return isAdmin() &&
              get(/databases/$(database)/documents/admins/$(request.auth.uid))
                .data.get('role', 'admin') == 'owner';
+    }
+
+    // Unauthenticated public write, so every field is whitelisted, length
+    // capped and type checked, status cannot start as anything but 'new', and
+    // createdAt must be the server's own clock.
+    function isValidContactMessage() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['name', 'email', 'message', 'status', 'createdAt'])
+             && d.keys().hasAll(['name', 'email', 'message', 'status', 'createdAt'])
+             && d.name is string && d.name.size() > 0 && d.name.size() <= 100
+             && d.email is string && d.email.size() <= 200
+             && d.email.matches('^[^@]+@[^@]+[.][^@]+$')
+             && d.message is string && d.message.size() > 0 && d.message.size() <= 5000
+             && d.status == 'new'
+             && d.createdAt == request.time;
+    }
+
+    // Triage may change status, owner and notes. What the sender actually wrote
+    // is immutable, so a message cannot be quietly rewritten after the fact.
+    function isValidContactUpdate() {
+      let d = request.resource.data;
+      let prior = resource.data;
+      return d.keys().hasOnly(['name', 'email', 'message', 'status', 'createdAt',
+                               'assignedTo', 'adminNotes', 'updatedAt', 'updatedBy'])
+             && d.status in ['new', 'in-progress', 'resolved']
+             && d.name == prior.name
+             && d.email == prior.email
+             && d.message == prior.message
+             && d.createdAt == prior.createdAt
+             && (!('assignedTo' in d.keys())
+                 || (d.assignedTo is string && d.assignedTo.size() <= 120))
+             && (!('adminNotes' in d.keys())
+                 || (d.adminNotes is string && d.adminNotes.size() <= 4000));
     }
 
     // A moderator may only move a mention between states. Everything else is a

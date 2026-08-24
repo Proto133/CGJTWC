@@ -22,6 +22,42 @@ export interface Announcement {
   updatedAt: Timestamp
 }
 
+// ---------------------------------------------------------------------------
+// Contact form messages
+// ---------------------------------------------------------------------------
+
+export type ContactMessageStatus = 'new' | 'in-progress' | 'resolved'
+
+/**
+ * A message from the public contact form.
+ *
+ * Deliberately a separate collection from `tickets`: tickets require an
+ * authenticated admin to create, and opening that up would let anyone on the
+ * internet write into the internal tracker. These are write-only for the
+ * public and readable only by admins, the same shape as registrations.
+ */
+export interface ContactMessage {
+  id: string
+  name: string
+  email: string
+  message: string
+  status: ContactMessageStatus
+  /** Free text: whoever picked it up. Not tied to an account. */
+  assignedTo?: string
+  /** Internal only, never shown to the sender. */
+  adminNotes?: string
+  createdAt: Timestamp
+  updatedAt?: Timestamp
+  updatedBy?: string
+}
+
+/** What the public form submits; everything else is set by rules or admins. */
+export interface ContactFormPayload {
+  name: string
+  email: string
+  message: string
+}
+
 export type AdminRole = 'owner' | 'admin'
 
 export interface AdminDoc {
