@@ -130,6 +130,32 @@ function onAdditionalToggle(index: number, value: boolean) {
 /** Additional rates that have not been pointed at a base tier yet. */
 const unpairedAdditional = computed(() =>
   form.value.payment.tiers.filter((t) => t.additional && !t.appliesTo))
+
+function addFaq() {
+  form.value.content.faqs.push({
+    // Generated once, so reordering or rewording does not remount panels or
+    // change which entry the public page considers stable.
+    id: `faq-${Date.now().toString(36)}`,
+    question: '',
+    answer: '',
+  })
+}
+
+function removeFaq(index: number) {
+  form.value.content.faqs.splice(index, 1)
+}
+
+/**
+ * Array order is display order on /faq, so reordering needs to be possible
+ * without deleting and retyping an entry.
+ */
+function moveFaq(index: number, delta: number) {
+  const list = form.value.content.faqs
+  const target = index + delta
+  if (target < 0 || target >= list.length) return
+  const [item] = list.splice(index, 1)
+  if (item) list.splice(target, 0, item)
+}
 </script>
 
 <template>
@@ -448,6 +474,84 @@ const unpairedAdditional = computed(() =>
 
       <q-separator />
 
+      <!-- FAQ -->
+      <q-expansion-item label="FAQ" icon="help_outline">
+        <div class="q-pa-md q-gutter-md">
+          <div class="settings-note settings-note--inline">
+            Shown at <code>/faq</code> in this order. Entries missing a question
+            or an answer are skipped on the public page, so a half-finished one
+            is safe to leave here.
+          </div>
+
+          <q-input
+            v-model="form.content.faqIntro"
+            type="textarea"
+            label="Intro paragraph (optional)"
+            outlined
+            autogrow
+          />
+
+          <div>
+            <div class="field-group-label">Questions</div>
+            <div
+              v-for="(faq, index) in form.content.faqs"
+              :key="faq.id"
+              class="tier-row"
+            >
+              <div class="row items-center q-gutter-xs q-mb-xs">
+                <span class="faq-index">{{ index + 1 }}</span>
+                <q-space />
+                <q-btn
+                  flat
+                  round
+                  dense
+                  icon="arrow_upward"
+                  :disable="index === 0"
+                  :aria-label="`Move question ${index + 1} up`"
+                  @click="moveFaq(index, -1)"
+                />
+                <q-btn
+                  flat
+                  round
+                  dense
+                  icon="arrow_downward"
+                  :disable="index === form.content.faqs.length - 1"
+                  :aria-label="`Move question ${index + 1} down`"
+                  @click="moveFaq(index, 1)"
+                />
+                <q-btn
+                  flat
+                  round
+                  dense
+                  icon="delete"
+                  color="negative"
+                  :aria-label="`Remove question ${index + 1}`"
+                  @click="removeFaq(index)"
+                />
+              </div>
+              <q-input
+                v-model="faq.question"
+                outlined
+                dense
+                label="Question"
+                class="q-mb-sm"
+              />
+              <q-input
+                v-model="faq.answer"
+                type="textarea"
+                outlined
+                dense
+                autogrow
+                label="Answer"
+              />
+            </div>
+            <q-btn flat dense no-caps icon="add" label="Add question" @click="addFaq" />
+          </div>
+        </div>
+      </q-expansion-item>
+
+      <q-separator />
+
       <!-- Content -->
       <q-expansion-item label="Page copy" icon="article">
         <div class="q-pa-md q-gutter-md">
@@ -545,6 +649,13 @@ const unpairedAdditional = computed(() =>
 </template>
 
 <style scoped>
+.faq-index {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--grey-400);
+}
+
 .tier-warning {
   margin: 6px 0 10px;
   font-size: 0.85rem;

@@ -74,6 +74,20 @@ export interface OrganizationProgram {
   seasonMonths: string
 }
 
+/**
+ * One question and answer on the FAQ page.
+ *
+ * Stored in the settings document rather than its own collection: these are
+ * page copy that changes a few times a season, so they belong with the rest of
+ * the editable text rather than warranting a collection and its own rules.
+ */
+export interface FaqItem {
+  /** Stable key so reordering or rewording does not remount every panel. */
+  id: string
+  question: string
+  answer: string
+}
+
 export interface OrganizationContent {
   /** Short teaser used in the About section on the home page. */
   aboutTeaser: string
@@ -88,6 +102,10 @@ export interface OrganizationContent {
   ctaText: string
   /** Intro line on the contact page. */
   contactIntro: string
+  /** Shown in order on /faq. Empty hides the page's list entirely. */
+  faqs: FaqItem[]
+  /** Optional lead paragraph above the questions. */
+  faqIntro: string
 }
 
 /** One row of the registration pricing table. */
@@ -237,6 +255,11 @@ export const defaultOrganization: OrganizationSettings = {
     ctaText: 'New wrestlers and families are always welcome.',
     contactIntro:
       'Questions about the program, registration or volunteering? Reach out anytime.',
+    faqIntro:
+      'Answers to what parents ask us most. If yours is not here, get in touch.',
+    // Managed from Admin > Settings > FAQ. Kept empty so clearing the list in
+    // the dashboard is not overridden by a default (see mergeSection).
+    faqs: [],
   },
 }
 

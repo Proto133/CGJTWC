@@ -22,14 +22,17 @@ const socialLinks = computed(() => settings.socialLinks);
 const mailtoHref = computed(() => settings.mailtoHref);
 const copyright = computed(() => settings.copyrightLine);
 
-// Register is deliberately not a nav link: a seventh item crowds the toolbar.
-// It gets a prominent button instead.
+// Register is deliberately not a nav link; it gets a prominent button instead.
+// Note this list is now seven items, which is about the limit before the
+// desktop toolbar starts to crowd. Anything further should go in the footer or
+// behind a grouped menu rather than being appended here.
 const navLinks = [
   { label: 'Home', to: '/', icon: 'home' },
   { label: 'About', to: '/about', icon: 'info' },
   { label: 'Staff', to: '/staff', icon: 'groups' },
   { label: 'Schedule', to: '/schedule', icon: 'event' },
   { label: 'Announcements', to: '/announcements', icon: 'campaign' },
+  { label: 'FAQ', to: '/faq', icon: 'help_outline' },
   { label: 'Contact', to: '/contact', icon: 'mail' },
 ];
 
