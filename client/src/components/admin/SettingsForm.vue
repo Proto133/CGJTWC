@@ -106,6 +106,30 @@ function addTier() {
 function removeTier(index: number) {
   form.value.payment.tiers.splice(index, 1)
 }
+
+/**
+ * Base tiers offered as pairing targets. Excludes additional rates, since one
+ * sibling rate cannot belong to another.
+ */
+const baseTierOptions = computed(() =>
+  form.value.payment.tiers
+    .filter((t) => !t.additional && t.label.trim() !== '')
+    .map((t) => ({ label: t.label, value: t.id })))
+
+/**
+ * Clearing the flag also clears the pairing, so a tier flipped back to a base
+ * fee cannot keep a stale `appliesTo` pointing at another tier.
+ */
+function onAdditionalToggle(index: number, value: boolean) {
+  const tier = form.value.payment.tiers[index]
+  if (!tier) return
+  tier.additional = value
+  if (!value) delete tier.appliesTo
+}
+
+/** Additional rates that have not been pointed at a base tier yet. */
+const unpairedAdditional = computed(() =>
+  form.value.payment.tiers.filter((t) => t.additional && !t.appliesTo))
 </script>
 
 <template>
@@ -336,6 +360,20 @@ function removeTier(index: number) {
 
           <div>
             <div class="field-group-label">Pricing tiers</div>
+            <div class="settings-note settings-note--inline">
+              Mark a tier as an additional-wrestler rate and say which base fee
+              it goes with. Additional rates are never shown as a choice on the
+              form — they are added once per wrestler after the first.
+            </div>
+
+            <div v-if="unpairedAdditional.length" class="tier-warning">
+              <q-icon name="warning" size="16px" class="q-mr-xs" />
+              {{ unpairedAdditional.length }} additional rate{{
+                unpairedAdditional.length === 1 ? '' : 's'
+              }} not linked to a base fee. Until linked, siblings on those
+              registrations will not be charged.
+            </div>
+
             <div
               v-for="(tier, index) in form.payment.tiers"
               :key="tier.id"
@@ -379,6 +417,26 @@ function removeTier(index: number) {
                     outlined
                     dense
                     label="Description"
+                  />
+                </div>
+                <div class="col-12 col-sm-6">
+                  <q-toggle
+                    :model-value="tier.additional === true"
+                    label="Additional-wrestler rate"
+                    dense
+                    @update:model-value="(v: boolean) => onAdditionalToggle(index, v)"
+                  />
+                </div>
+                <div v-if="tier.additional" class="col-12 col-sm-6">
+                  <q-select
+                    v-model="tier.appliesTo"
+                    :options="baseTierOptions"
+                    outlined
+                    dense
+                    emit-value
+                    map-options
+                    label="Applies to"
+                    hint="The base fee this sibling rate accompanies"
                   />
                 </div>
               </div>
@@ -487,6 +545,11 @@ function removeTier(index: number) {
 </template>
 
 <style scoped>
+.tier-warning {
+  margin: 6px 0 10px;
+  font-size: 0.85rem;
+  color: var(--negative, #c10015);
+}
 .settings-note {
   background: var(--grey-050);
   border: 1px solid var(--grey-200);

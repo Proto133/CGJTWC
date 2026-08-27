@@ -98,6 +98,22 @@ export interface PricingTier {
   /** Whole dollars. */
   amount: number
   description: string
+  /**
+   * True when this is a per-extra-wrestler rate rather than a base fee.
+   *
+   * Additional rates are never offered as a primary choice on the registration
+   * form — a family picking one on its own would owe the sibling price for
+   * their first child. They are applied on top, once per extra wrestler.
+   */
+  additional?: boolean
+  /**
+   * For an additional rate, the id of the base tier it accompanies.
+   *
+   * The relationship has to be explicit because a club can run several windows
+   * at once — a standard and a late sibling rate, say — and nothing about the
+   * ids or amounts says which belongs to which.
+   */
+  appliesTo?: string
 }
 
 export interface OrganizationPayment {

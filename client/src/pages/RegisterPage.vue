@@ -5,6 +5,7 @@ import { useRegistrationsStore } from 'stores/registrations'
 import { useSettingsStore } from 'stores/settings'
 import { generatePaymentReference } from 'src/utils/reference'
 import { toStoredDate, isValidUsDate } from 'src/utils/registration'
+import { baseTiers, additionalRateFor, totalDue } from 'src/utils/pricing'
 import type { PaymentMethod } from 'src/types'
 
 const registrations = useRegistrationsStore()
@@ -12,26 +13,24 @@ const settings = useSettingsStore()
 const org = computed(() => settings.org)
 const pay = computed(() => settings.org.payment)
 
-/**
- * The id of the per-extra-wrestler tier. Stable by contract — organization.ts
- * documents tier ids as keys that survive renaming the label.
- */
-const ADDITIONAL_TIER_ID = 'multi'
-
 /** Only tiers an admin has actually filled in. */
 const tiers = computed(() => pay.value.tiers.filter((t) => t.label.trim() !== ''))
 
 /**
- * Tiers a parent may choose. The additional-wrestler rate is excluded on
- * purpose: it is not an alternative to the base fee, it is applied on top of it
- * once there is more than one wrestler, so offering it as a radio option would
- * let a family pay $200 total for their first child.
+ * Tiers a parent may choose. Additional-wrestler rates are excluded on purpose:
+ * they are not alternatives to the base fee but additions to it, so offering
+ * one as a radio option would let a family owe only the sibling price for their
+ * first child.
  */
-const selectableTiers = computed(() =>
-  tiers.value.filter((t) => t.id !== ADDITIONAL_TIER_ID))
+const selectableTiers = computed(() => baseTiers(tiers.value))
 
+/**
+ * The extra-wrestler rate that pairs with whichever base tier was chosen. The
+ * club can run more than one window at a time — a standard and a late sibling
+ * rate — so this depends on the selection rather than being a single fixed id.
+ */
 const additionalTier = computed(() =>
-  tiers.value.find((t) => t.id === ADDITIONAL_TIER_ID) ?? null)
+  additionalRateFor(tiers.value, form.value.payment.tierId))
 
 const methods: { value: PaymentMethod; label: string; icon: string }[] = [
   { value: 'zelle', label: 'Zelle', icon: 'account_balance' },
@@ -93,10 +92,9 @@ const selectedTier = computed(() =>
 const wrestlerCount = computed(() => form.value.wrestlers.length)
 const extraWrestlers = computed(() => Math.max(0, wrestlerCount.value - 1))
 
-/** First wrestler at the chosen tier, each additional one at the extra rate. */
+/** First wrestler at the chosen tier, each additional one at the paired rate. */
 const amountDue = computed(() =>
-  (selectedTier.value?.amount ?? 0)
-  + extraWrestlers.value * (additionalTier.value?.amount ?? 0))
+  totalDue(tiers.value, form.value.payment.tierId, wrestlerCount.value))
 
 /**
  * True when extra wrestlers cannot be priced because the club has not set an
