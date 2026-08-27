@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { date } from 'quasar'
+import { wrestlerNames, toUsDate, toStoredDate, isValidUsDate } from 'src/utils/registration'
 import type { Registration, PaymentStatus, PaymentConfirmationInput } from 'src/types'
 
 const props = defineProps<{
@@ -14,7 +15,15 @@ const emit = defineEmits<{
   (e: 'save', payload: PaymentConfirmationInput): void
 }>()
 
-const today = () => date.formatDate(new Date(), 'YYYY/MM/DD')
+/**
+ * Dates are held in the form as MM-DD-YYYY to match the rest of the UI, and
+ * converted to the stored YYYY/MM/DD on save. Security rules validate the
+ * stored form with a regex, so the conversion is not optional.
+ */
+const today = () => date.formatDate(new Date(), 'MM-DD-YYYY')
+
+/** Exposed to the template. */
+const namesOf = wrestlerNames
 
 // Typed explicitly so `status` stays a PaymentStatus rather than widening to
 // string, which would break the typed save payload.
@@ -66,23 +75,25 @@ watch(() => props.registration, (reg) => {
     status: p?.status && p.status !== 'unpaid' ? p.status : 'paid',
     confirmationRef: p?.confirmationRef ?? '',
     amountReceived: p?.amountReceived ?? p?.amountDue ?? 0,
-    receivedAt: p?.receivedAt ?? today(),
-    depositedAt: p?.depositedAt ?? '',
+    // Stored values arrive as YYYY/MM/DD and are shown US-style.
+    receivedAt: p?.receivedAt ? toUsDate(p.receivedAt) : today(),
+    depositedAt: toUsDate(p?.depositedAt),
     notes: p?.notes ?? '',
   }
 }, { immediate: true })
 
 const dateRule = (v: string) =>
-  /^\d{4}\/\d{2}\/\d{2}$/.test(v) || 'Use YYYY/MM/DD'
+  isValidUsDate(v) || 'Use MM-DD-YYYY'
 
 function handleSave() {
   emit('save', {
     status: form.value.status,
     confirmationRef: form.value.confirmationRef.trim(),
     amountReceived: Number(form.value.amountReceived) || 0,
-    receivedAt: form.value.receivedAt,
-    ...(isCheck.value && form.value.depositedAt
-      ? { depositedAt: form.value.depositedAt }
+    // Back to the stored format the rules require.
+    receivedAt: toStoredDate(form.value.receivedAt),
+    ...(isCheck.value && toStoredDate(form.value.depositedAt)
+      ? { depositedAt: toStoredDate(form.value.depositedAt) }
       : {}),
     ...(form.value.notes.trim() ? { notes: form.value.notes.trim() } : {}),
   })
@@ -98,7 +109,7 @@ function handleSave() {
       <q-card-section>
         <div class="dialog-title">Record Payment</div>
         <div v-if="registration" class="dialog-sub">
-          {{ registration.wrestler.firstName }} {{ registration.wrestler.lastName }}
+          {{ namesOf(registration) }}
           <span v-if="registration.payment?.reference">
             · ref <strong>{{ registration.payment.reference }}</strong>
           </span>
@@ -153,15 +164,15 @@ function handleSave() {
             <q-input
               v-model="form.receivedAt"
               label="Date received *"
-              mask="####/##/##"
-              placeholder="YYYY/MM/DD"
+              mask="##-##-####"
+              placeholder="MM-DD-YYYY"
               outlined
               :rules="requiresDetail ? [dateRule] : []"
             >
               <template #append>
                 <q-icon name="event" class="cursor-pointer">
                   <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                    <q-date v-model="form.receivedAt" mask="YYYY/MM/DD" />
+                    <q-date v-model="form.receivedAt" mask="MM-DD-YYYY" />
                   </q-popup-proxy>
                 </q-icon>
               </template>
@@ -174,14 +185,14 @@ function handleSave() {
           v-if="isCheck"
           v-model="form.depositedAt"
           label="Date deposited"
-          mask="####/##/##"
-          placeholder="YYYY/MM/DD"
+          mask="##-##-####"
+          placeholder="MM-DD-YYYY"
           outlined
         >
           <template #append>
             <q-icon name="event" class="cursor-pointer">
               <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                <q-date v-model="form.depositedAt" mask="YYYY/MM/DD" />
+                <q-date v-model="form.depositedAt" mask="MM-DD-YYYY" />
               </q-popup-proxy>
             </q-icon>
           </template>

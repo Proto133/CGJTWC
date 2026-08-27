@@ -283,8 +283,8 @@ export interface RegistrationWrestler {
   yearsExperience?: string
   previousClub?: string
   /**
-   * A sibling already in the club. A stopgap for grouping families by hand
-   * until one submission can carry several wrestlers.
+   * @deprecated Superseded by registering siblings in one submission. Retained
+   * so registrations captured while the question existed still render.
    */
   siblingName?: string
   /** USA Wrestling membership number, where the wrestler already has one. */
@@ -332,7 +332,13 @@ export interface RegistrationEmergency {
  */
 export interface Registration {
   id: string
-  wrestler: RegistrationWrestler
+  /**
+   * Legacy single-wrestler shape, on submissions predating multi-wrestler
+   * support. Read it through `registrationWrestlers()` rather than directly.
+   */
+  wrestler?: RegistrationWrestler
+  /** One family, one submission, one payment. Newest shape. */
+  wrestlers?: RegistrationWrestler[]
   guardian: RegistrationGuardian
   address: RegistrationAddress
   emergency: RegistrationEmergency
@@ -356,7 +362,8 @@ export interface RegistrationPaymentInput {
 }
 
 export interface RegistrationFormPayload {
-  wrestler: RegistrationWrestler
+  /** At least one; the form starts with a single card. */
+  wrestlers: RegistrationWrestler[]
   guardian: RegistrationGuardian
   address: RegistrationAddress
   emergency: RegistrationEmergency

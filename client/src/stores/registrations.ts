@@ -72,7 +72,8 @@ export const useRegistrationsStore = defineStore('registrations', () => {
     submitting.value = true
     try {
       await addDoc(collection(db, 'registrations'), {
-        wrestler: payload.wrestler,
+        // A list even for a single wrestler, so the stored shape is uniform.
+        wrestlers: payload.wrestlers,
         guardian: payload.guardian,
         address: payload.address,
         emergency: payload.emergency,
@@ -82,6 +83,12 @@ export const useRegistrationsStore = defineStore('registrations', () => {
           // themselves paid, only an admin can, and only with confirmation detail.
           status: 'unpaid',
         },
+        // These were previously missing, so the volunteer and referral answers
+        // were collected by the form and then dropped here without a trace.
+        // Forwarding the whole payload wholesale is deliberately avoided: rules
+        // whitelist keys, so an unexpected one rejects the entire submission.
+        ...(payload.volunteer ? { volunteer: payload.volunteer } : {}),
+        ...(payload.referralSource ? { referralSource: payload.referralSource } : {}),
         ...(payload.notes ? { notes: payload.notes } : {}),
         // Rules require exactly this value on create; only admins can advance it.
         status: 'new',

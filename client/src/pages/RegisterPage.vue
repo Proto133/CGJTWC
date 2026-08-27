@@ -4,6 +4,7 @@ import { copyToClipboard, Notify } from 'quasar'
 import { useRegistrationsStore } from 'stores/registrations'
 import { useSettingsStore } from 'stores/settings'
 import { generatePaymentReference } from 'src/utils/reference'
+import { toStoredDate, isValidUsDate } from 'src/utils/registration'
 import type { PaymentMethod } from 'src/types'
 
 const registrations = useRegistrationsStore()
@@ -11,8 +12,26 @@ const settings = useSettingsStore()
 const org = computed(() => settings.org)
 const pay = computed(() => settings.org.payment)
 
+/**
+ * The id of the per-extra-wrestler tier. Stable by contract — organization.ts
+ * documents tier ids as keys that survive renaming the label.
+ */
+const ADDITIONAL_TIER_ID = 'multi'
+
 /** Only tiers an admin has actually filled in. */
 const tiers = computed(() => pay.value.tiers.filter((t) => t.label.trim() !== ''))
+
+/**
+ * Tiers a parent may choose. The additional-wrestler rate is excluded on
+ * purpose: it is not an alternative to the base fee, it is applied on top of it
+ * once there is more than one wrestler, so offering it as a radio option would
+ * let a family pay $200 total for their first child.
+ */
+const selectableTiers = computed(() =>
+  tiers.value.filter((t) => t.id !== ADDITIONAL_TIER_ID))
+
+const additionalTier = computed(() =>
+  tiers.value.find((t) => t.id === ADDITIONAL_TIER_ID) ?? null)
 
 const methods: { value: PaymentMethod; label: string; icon: string }[] = [
   { value: 'zelle', label: 'Zelle', icon: 'account_balance' },
@@ -24,18 +43,22 @@ const submitted = ref(false)
 /** Shown on the confirmation screen so the payer can put it in the memo. */
 const submittedReference = ref('')
 
+function emptyWrestler() {
+  return {
+    firstName: '',
+    lastName: '',
+    // Held in MM-DD-YYYY while the parent types; converted on submit.
+    dob: '',
+    grade: '',
+    yearsExperience: '',
+    previousClub: '',
+    usawNumber: '',
+  }
+}
+
 function emptyForm() {
   return {
-    wrestler: {
-      firstName: '',
-      lastName: '',
-      dob: '',
-      grade: '',
-      yearsExperience: '',
-      previousClub: '',
-      siblingName: '',
-      usawNumber: '',
-    },
+    wrestlers: [emptyWrestler()],
     guardian: { firstName: '', lastName: '', email: '', phone: '' },
     address: { street: '', city: '', state: '', postalCode: '' },
     emergency: { name: '', phone: '', relationship: '' },
@@ -57,9 +80,9 @@ const form = ref(emptyForm())
 const required = (label: string) => (val: string) =>
   (val && val.trim().length > 0) || `${label} is required`
 
-// Kept in sync with the dob regex in firestore.rules.
+// Entered US-style. Rejects 02-31-2015, which a regex alone would accept.
 const dobRule = (val: string) =>
-  /^\d{4}\/\d{2}\/\d{2}$/.test(val) || 'Use the date picker (YYYY/MM/DD)'
+  isValidUsDate(val) || 'Enter the date as MM-DD-YYYY'
 
 const emailRule = (val: string) =>
   /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(val) || 'Enter a valid email address'
@@ -67,7 +90,31 @@ const emailRule = (val: string) =>
 const selectedTier = computed(() =>
   tiers.value.find((t) => t.id === form.value.payment.tierId) ?? null)
 
-const amountDue = computed(() => selectedTier.value?.amount ?? 0)
+const wrestlerCount = computed(() => form.value.wrestlers.length)
+const extraWrestlers = computed(() => Math.max(0, wrestlerCount.value - 1))
+
+/** First wrestler at the chosen tier, each additional one at the extra rate. */
+const amountDue = computed(() =>
+  (selectedTier.value?.amount ?? 0)
+  + extraWrestlers.value * (additionalTier.value?.amount ?? 0))
+
+/**
+ * True when extra wrestlers cannot be priced because the club has not set an
+ * additional-wrestler amount. Silently charging nothing for them would leave
+ * the family underpaying with no warning, so this is surfaced instead.
+ */
+const additionalRateMissing = computed(() =>
+  extraWrestlers.value > 0 && !(additionalTier.value?.amount))
+
+function addWrestler() {
+  form.value.wrestlers.push(emptyWrestler())
+}
+
+function removeWrestler(index: number) {
+  // Never leave the form with nothing to submit.
+  if (form.value.wrestlers.length <= 1) return
+  form.value.wrestlers.splice(index, 1)
+}
 
 const volunteerRoles = [
   { key: 'assistantCoach', label: 'Assistant Coach' },
@@ -83,22 +130,22 @@ async function handleSubmit() {
   const reference = generatePaymentReference()
 
   const ok = await registrations.submit({
-    wrestler: {
-      firstName: f.wrestler.firstName.trim(),
-      lastName: f.wrestler.lastName.trim(),
-      dob: f.wrestler.dob.trim(),
-      grade: f.wrestler.grade.trim(),
+    wrestlers: f.wrestlers.map((w) => ({
+      firstName: w.firstName.trim(),
+      lastName: w.lastName.trim(),
+      // Converted from the MM-DD-YYYY the parent typed to the YYYY/MM/DD the
+      // rules validate and the rest of the app sorts on.
+      dob: toStoredDate(w.dob.trim()),
+      grade: w.grade.trim(),
       // Spread so an unanswered optional never reaches Firestore as ''. The
       // rules cap their length but do not require them.
-      ...(f.wrestler.yearsExperience.trim()
-        ? { yearsExperience: f.wrestler.yearsExperience.trim() } : {}),
-      ...(f.wrestler.previousClub.trim()
-        ? { previousClub: f.wrestler.previousClub.trim() } : {}),
-      ...(f.wrestler.siblingName.trim()
-        ? { siblingName: f.wrestler.siblingName.trim() } : {}),
-      ...(f.wrestler.usawNumber.trim()
-        ? { usawNumber: f.wrestler.usawNumber.trim() } : {}),
-    },
+      ...(w.yearsExperience.trim()
+        ? { yearsExperience: w.yearsExperience.trim() } : {}),
+      ...(w.previousClub.trim()
+        ? { previousClub: w.previousClub.trim() } : {}),
+      ...(w.usawNumber.trim()
+        ? { usawNumber: w.usawNumber.trim() } : {}),
+    })),
     guardian: {
       firstName: f.guardian.firstName.trim(),
       lastName: f.guardian.lastName.trim(),
@@ -225,87 +272,125 @@ async function copyReference() {
       <!-- Form -->
       <q-form v-else @submit.prevent="handleSubmit">
         <q-card flat bordered class="q-pa-md">
-          <div class="form-section-title">Wrestler</div>
-          <div class="row q-col-gutter-sm">
-            <div class="col-12 col-sm-6">
-              <q-input
-                v-model="form.wrestler.firstName"
-                label="First Name *"
-                outlined
-                :rules="[required('First name')]"
+          <div class="form-section-title">
+            {{ wrestlerCount > 1 ? 'Wrestlers' : 'Wrestler' }}
+          </div>
+          <p class="section-note">
+            Registering more than one child? Add them all here — you only fill in
+            your contact details once, and you get a single payment reference.
+          </p>
+
+          <div
+            v-for="(wrestler, index) in form.wrestlers"
+            :key="index"
+            class="wrestler-block"
+          >
+            <div class="wrestler-block__head">
+              <span class="wrestler-block__title">
+                Wrestler {{ index + 1 }}
+              </span>
+              <!-- Only offered from the second card on: removing the only
+                   wrestler would leave nothing to submit. -->
+              <q-btn
+                v-if="form.wrestlers.length > 1"
+                dense
+                flat
+                no-caps
+                size="sm"
+                color="negative"
+                icon="close"
+                label="Remove"
+                @click="removeWrestler(index)"
               />
             </div>
-            <div class="col-12 col-sm-6">
-              <q-input
-                v-model="form.wrestler.lastName"
-                label="Last Name *"
-                outlined
-                :rules="[required('Last name')]"
-              />
+
+            <div class="row q-col-gutter-sm">
+              <div class="col-12 col-sm-6">
+                <q-input
+                  v-model="wrestler.firstName"
+                  label="First Name *"
+                  outlined
+                  :rules="[required('First name')]"
+                />
+              </div>
+              <div class="col-12 col-sm-6">
+                <q-input
+                  v-model="wrestler.lastName"
+                  label="Last Name *"
+                  outlined
+                  :rules="[required('Last name')]"
+                />
+              </div>
+              <div class="col-12 col-sm-6">
+                <q-input
+                  v-model="wrestler.dob"
+                  label="Date of Birth *"
+                  mask="##-##-####"
+                  placeholder="MM-DD-YYYY"
+                  outlined
+                  :rules="[dobRule]"
+                >
+                  <template #append>
+                    <q-icon name="event" class="cursor-pointer">
+                      <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                        <q-date v-model="wrestler.dob" mask="MM-DD-YYYY" />
+                      </q-popup-proxy>
+                    </q-icon>
+                  </template>
+                </q-input>
+              </div>
+              <div class="col-12 col-sm-6">
+                <q-input
+                  v-model="wrestler.grade"
+                  label="Grade *"
+                  outlined
+                  hint="e.g. 4, or K"
+                  :rules="[required('Grade')]"
+                />
+              </div>
+              <div class="col-12 col-sm-6">
+                <q-input
+                  v-model="wrestler.yearsExperience"
+                  label="Years of Experience"
+                  outlined
+                  maxlength="40"
+                  hint="e.g. first year, or 3 seasons"
+                />
+              </div>
+              <div class="col-12 col-sm-6">
+                <q-input
+                  v-model="wrestler.previousClub"
+                  label="Previous Club Attended"
+                  outlined
+                  maxlength="120"
+                  hint="Leave blank if this is their first club"
+                />
+              </div>
+              <div class="col-12 col-sm-6">
+                <q-input
+                  v-model="wrestler.usawNumber"
+                  label="USAW Number"
+                  outlined
+                  maxlength="40"
+                  hint="If they already have one"
+                />
+              </div>
             </div>
-            <div class="col-12 col-sm-6">
-              <q-input
-                v-model="form.wrestler.dob"
-                label="Date of Birth *"
-                mask="####/##/##"
-                placeholder="YYYY/MM/DD"
-                outlined
-                :rules="[dobRule]"
-              >
-                <template #append>
-                  <q-icon name="event" class="cursor-pointer">
-                    <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                      <q-date v-model="form.wrestler.dob" mask="YYYY/MM/DD" />
-                    </q-popup-proxy>
-                  </q-icon>
-                </template>
-              </q-input>
-            </div>
-            <div class="col-12 col-sm-6">
-              <q-input
-                v-model="form.wrestler.grade"
-                label="Grade *"
-                outlined
-                hint="e.g. 4, or K"
-                :rules="[required('Grade')]"
-              />
-            </div>
-            <div class="col-12 col-sm-6">
-              <q-input
-                v-model="form.wrestler.yearsExperience"
-                label="Years of Experience"
-                outlined
-                maxlength="40"
-                hint="e.g. first year, or 3 seasons"
-              />
-            </div>
-            <div class="col-12 col-sm-6">
-              <q-input
-                v-model="form.wrestler.previousClub"
-                label="Previous Club Attended"
-                outlined
-                maxlength="120"
-                hint="Leave blank if this is their first club"
-              />
-            </div>
-            <div class="col-12 col-sm-6">
-              <q-input
-                v-model="form.wrestler.siblingName"
-                label="Sibling in the Club"
-                outlined
-                maxlength="120"
-                hint="So we can group your family together"
-              />
-            </div>
-            <div class="col-12 col-sm-6">
-              <q-input
-                v-model="form.wrestler.usawNumber"
-                label="USAW Number"
-                outlined
-                maxlength="40"
-                hint="If they already have one"
-              />
-            </div>
+          </div>
+
+          <q-btn
+            outline
+            no-caps
+            color="primary"
+            icon="person_add"
+            label="Add a Wrestler"
+            class="q-mt-sm"
+            :disable="form.wrestlers.length >= 6"
+            @click="addWrestler"
+          />
+          <div v-if="form.wrestlers.length >= 6" class="section-note q-mt-xs">
+            That is the most this form takes at once — please contact us for a
+            larger family and we will sort it out directly.
           </div>
 
           <q-separator class="q-my-md" />
@@ -457,11 +542,11 @@ async function copyReference() {
 
           <div class="form-section-title">Payment</div>
 
-          <div v-if="tiers.length" class="q-mb-md">
+          <div v-if="selectableTiers.length" class="q-mb-md">
             <q-option-group
               v-model="form.payment.tierId"
               type="radio"
-              :options="tiers.map((t) => ({
+              :options="selectableTiers.map((t) => ({
                 label: t.amount > 0 ? `${t.label} — $${t.amount}` : t.label,
                 value: t.id,
               }))"
@@ -469,6 +554,32 @@ async function copyReference() {
             />
             <div v-if="selectedTier?.description" class="tier-hint">
               {{ selectedTier.description }}
+            </div>
+
+            <!-- Applied automatically rather than chosen: the extra-wrestler
+                 rate is on top of the base fee, not instead of it. -->
+            <div v-if="extraWrestlers > 0" class="fee-breakdown">
+              <div class="fee-row">
+                <span>{{ selectedTier?.label ?? 'Registration' }} (first wrestler)</span>
+                <span>${{ selectedTier?.amount ?? 0 }}</span>
+              </div>
+              <div v-if="additionalTier?.amount" class="fee-row">
+                <span>
+                  {{ additionalTier.label }} &times; {{ extraWrestlers }}
+                </span>
+                <span>${{ extraWrestlers * additionalTier.amount }}</span>
+              </div>
+              <div class="fee-row fee-row--total">
+                <span>Total for {{ wrestlerCount }} wrestlers</span>
+                <span>${{ amountDue }}</span>
+              </div>
+            </div>
+
+            <div v-if="additionalRateMissing" class="fee-warning">
+              <q-icon name="info" size="16px" class="q-mr-xs" />
+              We have not published an additional-wrestler rate yet, so the total
+              above covers the first wrestler only. A coach will confirm the fee
+              for the others before you pay.
             </div>
           </div>
           <div v-else class="empty-state q-mb-md">
@@ -561,6 +672,56 @@ async function copyReference() {
 .volunteer-roles {
   margin-top: 10px;
   padding-left: 4px;
+}
+
+.wrestler-block {
+  border: 1px solid var(--grey-200, #e5e7eb);
+  border-radius: var(--radius-md, 10px);
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.wrestler-block__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.wrestler-block__title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--grey-500);
+}
+
+.fee-breakdown {
+  margin-top: 12px;
+  border-top: 1px solid var(--grey-200, #e5e7eb);
+  padding-top: 10px;
+}
+
+.fee-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.92rem;
+  padding: 3px 0;
+}
+
+.fee-row--total {
+  font-weight: 700;
+  border-top: 1px solid var(--grey-200, #e5e7eb);
+  margin-top: 6px;
+  padding-top: 8px;
+}
+
+.fee-warning {
+  margin-top: 10px;
+  font-size: 0.86rem;
+  color: var(--grey-600, #6b7280);
 }
 
 /* One per line: these labels wrap awkwardly side by side on a phone. */

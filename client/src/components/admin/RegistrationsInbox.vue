@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { Dialog, date, copyToClipboard, Notify } from 'quasar'
 import { useRegistrationsStore } from 'stores/registrations'
+import { registrationWrestlers, wrestlerNames, toUsDate } from 'src/utils/registration'
 import PaymentDialog from 'components/admin/PaymentDialog.vue'
 import type {
   Registration,
@@ -81,9 +82,9 @@ const filtered = computed(() => {
     const byPayment = paymentFilter.value === 'all' || payStatus === paymentFilter.value
 
     // Match on the things someone would have to hand on a phone call.
+    // wrestlerNames covers every child on the submission, not just the first.
     const haystack = [
-      r.wrestler.firstName,
-      r.wrestler.lastName,
+      wrestlerNames(r),
       r.guardian.firstName,
       r.guardian.lastName,
       r.guardian.email,
@@ -122,15 +123,18 @@ function submittedOn(reg: Registration) {
 function confirmDelete(reg: Registration) {
   Dialog.create({
     title: 'Delete registration?',
-    message:
-      `This permanently removes the submission for ` +
-      `${reg.wrestler.firstName} ${reg.wrestler.lastName}.`,
+    message: `This permanently removes the submission for ${wrestlerNames(reg)}.`,
     cancel: true,
     persistent: true,
   }).onOk(() => {
     void store.remove(reg.id)
   })
 }
+
+/** Re-exported for the template. */
+const wrestlersOf = registrationWrestlers
+const usDate = toUsDate
+const namesOf = wrestlerNames
 </script>
 
 <template>
@@ -213,8 +217,17 @@ function confirmDelete(reg: Registration) {
         <template #header>
           <q-item-section>
             <q-item-label class="text-weight-medium">
-              {{ reg.wrestler.firstName }} {{ reg.wrestler.lastName }}
-              <span class="text-caption text-grey-6">· Grade {{ reg.wrestler.grade }}</span>
+              {{ namesOf(reg) }}
+              <!-- Count rather than every grade: a family of four would
+                   otherwise make this row unreadable. -->
+              <span class="text-caption text-grey-6">
+                <template v-if="wrestlersOf(reg).length > 1">
+                  · {{ wrestlersOf(reg).length }} wrestlers
+                </template>
+                <template v-else-if="wrestlersOf(reg).length === 1">
+                  · Grade {{ wrestlersOf(reg)[0]?.grade }}
+                </template>
+              </span>
             </q-item-label>
             <q-item-label caption>
               {{ submittedOn(reg) }}
@@ -253,21 +266,21 @@ function confirmDelete(reg: Registration) {
         <div class="q-pa-md detail">
           <div class="row q-col-gutter-md">
             <div class="col-12 col-sm-6">
-              <div class="detail__label">Wrestler</div>
-              <div>{{ reg.wrestler.firstName }} {{ reg.wrestler.lastName }}</div>
-              <div>Born {{ reg.wrestler.dob }}</div>
-              <div>Grade {{ reg.wrestler.grade }}</div>
-              <div v-if="reg.wrestler.yearsExperience">
-                Experience: {{ reg.wrestler.yearsExperience }}
+              <div class="detail__label">
+                {{ wrestlersOf(reg).length > 1 ? 'Wrestlers' : 'Wrestler' }}
               </div>
-              <div v-if="reg.wrestler.previousClub">
-                Previous club: {{ reg.wrestler.previousClub }}
-              </div>
-              <div v-if="reg.wrestler.siblingName">
-                Sibling: {{ reg.wrestler.siblingName }}
-              </div>
-              <div v-if="reg.wrestler.usawNumber">
-                USAW #{{ reg.wrestler.usawNumber }}
+              <div
+                v-for="(w, i) in wrestlersOf(reg)"
+                :key="i"
+                class="wrestler-detail"
+              >
+                <div class="text-weight-medium">{{ w.firstName }} {{ w.lastName }}</div>
+                <div>Born {{ usDate(w.dob) }} · Grade {{ w.grade }}</div>
+                <div v-if="w.yearsExperience">Experience: {{ w.yearsExperience }}</div>
+                <div v-if="w.previousClub">Previous club: {{ w.previousClub }}</div>
+                <!-- Only on registrations taken while the question existed. -->
+                <div v-if="w.siblingName">Sibling: {{ w.siblingName }}</div>
+                <div v-if="w.usawNumber">USAW #{{ w.usawNumber }}</div>
               </div>
             </div>
             <div class="col-12 col-sm-6">
@@ -440,6 +453,13 @@ function confirmDelete(reg: Registration) {
 <style scoped>
 .vol-badge {
   margin: 0 4px 4px 0;
+}
+
+/* Separates siblings without a heavy divider per child. */
+.wrestler-detail + .wrestler-detail {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--grey-200, #e5e7eb);
 }
 .privacy-banner {
   display: flex;
