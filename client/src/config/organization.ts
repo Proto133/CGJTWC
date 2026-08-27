@@ -257,9 +257,219 @@ export const defaultOrganization: OrganizationSettings = {
       'Questions about the program, registration or volunteering? Reach out anytime.',
     faqIntro:
       'Answers to what parents ask us most. If yours is not here, get in touch.',
-    // Managed from Admin > Settings > FAQ. Kept empty so clearing the list in
-    // the dashboard is not overridden by a default (see mergeSection).
-    faqs: [],
+    // Starter content, editable from Admin > Settings > FAQ.
+    //
+    // Answers are plain text, not markdown: they render with white-space
+    // pre-wrap, so newlines matter and a bullet is a literal • character.
+    //
+    // IMPORTANT: because pre-wrap honours every newline, a paragraph must be a
+    // single unbroken string. Splitting prose across source lines with '\n'
+    // would hard-wrap it at that width on every screen, breaking sentences
+    // mid-flow on a phone. Concatenate prose with '+' and reserve array
+    // entries for whole paragraphs, blank lines and individual bullets.
+    //
+    // Caveat: because mergeSection treats an empty array as "not set", deleting
+    // every question in the dashboard falls back to this list rather than
+    // showing none. Removing individual entries works fine. See the note on
+    // OrganizationSocial.featuredPosts for the same trap.
+    faqs: [
+      {
+        id: 'faq-experience',
+        question: 'Does my child need any wrestling experience?',
+        answer: [
+          'No. Youth rooms are built for first-timers. Coaches start with how to',
+          'stand, how to move, how to fall safely, and how to treat a partner.',
+          'Nobody is expected to know a move on day one.',
+        ].join(' '),
+      },
+      {
+        id: 'faq-safety',
+        question: 'Is wrestling safe? It looks intense.',
+        answer: [
+          'It is a contact sport, so bumps, mat burns and sore muscles happen. '
+          + 'Serious injury rates in youth wrestling are generally lower than in '
+          + 'football, hockey and some other contact sports when kids are paired '
+          + 'by size and coached with technique first.',
+          '',
+          'What actually keeps kids safer:',
+          '• Pairing by size and experience, not just age',
+          '• Teaching how to fall and how to stop a drill',
+          '• Headgear for the ears',
+          '• Clean mats and clean clothes — skin issues are the more common '
+          + 'problem, and they are preventable',
+          '• No weight cutting at the youth level',
+          '',
+          'If something looks too rough for your child\u2019s age group, say so. '
+          + 'A good room wants that conversation.',
+        ].join('\n'),
+      },
+      {
+        id: 'faq-first-practice',
+        question: 'What happens at the first practice?',
+        answer: [
+          'Usually about an hour. Warm-up games and movement, a couple of basic '
+          + 'positions, partner drills, maybe a fun game at the end. They will '
+          + 'not be thrown into a real match. First day success is: they showed '
+          + 'up, they moved, they left willing to come back.',
+          '',
+          'It is normal if they are shy, clingy or unsure. We see that every '
+          + 'season.',
+        ].join('\n'),
+      },
+      {
+        id: 'faq-what-to-wear',
+        question: 'What should they wear to the first practice?',
+        answer: [
+          'Comfortable, close-fitting athletic clothes and a water bottle. No '
+          + 'jewelry. No baggy hoodies. If you already have wrestling shoes, '
+          + 'great; if not, clean socks or clean indoor shoes are fine for a '
+          + 'first look.',
+          '',
+          'We would rather they show up than wait until the perfect kit is in '
+          + 'the cart.',
+        ].join('\n'),
+      },
+      {
+        id: 'faq-equipment',
+        question: 'What equipment does my child need?',
+        answer: [
+          'Less than it looks like from the outside. For the first practice, '
+          + 'most kids just need:',
+          '• Athletic shorts with no zippers, buttons or pockets',
+          '• A snug T-shirt or compression shirt — loose shirts get grabbed',
+          '• Clean socks or clean indoor shoes',
+          '• A water bottle with their name on it',
+          '• Hair pulled back if it can get in their eyes',
+          '• Trimmed fingernails — long nails scratch partners',
+          '',
+          'That is enough to try the sport. If they stick with it, the two '
+          + 'pieces that actually matter are:',
+          '',
+          'Wrestling shoes — light, snug shoes made for the mat. They give grip '
+          + 'and ankle support. Regular sneakers usually are not allowed on the '
+          + 'mats: they track dirt and do not grip the same way. A solid youth '
+          + 'pair is typically $30\u2013$60. Do not buy a size to grow into; loose '
+          + 'shoes cause rolled ankles.',
+          '',
+          'Headgear — this is ear protection, not a helmet. It helps prevent '
+          + 'cauliflower ear, a permanent thickening from repeated rubbing. Most '
+          + 'clubs want it once kids start live wrestling, and it is required at '
+          + 'almost every tournament. $20\u2013$40 is plenty.',
+          '',
+          'Optional, not required:',
+          '• Knee pads — some kids like one on the shooting knee; many never '
+          + 'use them',
+          '• Mouthguard — useful with braces, otherwise uncommon at youth level',
+          '• Singlet — the tight one-piece competition uniform, not everyday '
+          + 'practice. Many clubs loan or issue one, so do not buy until you '
+          + 'know what the club uses.',
+          '',
+          'Ask us before you spend. A lot of rooms have loaner shoes and '
+          + 'headgear for first-year families.',
+        ].join('\n'),
+      },
+      {
+        id: 'faq-not-athletic',
+        question: 'My child is small, quiet or not sporty. Can they still wrestle?',
+        answer: [
+          'Yes. Wrestling is one of the few sports that sorts kids by weight, so a',
+          'smaller child is not lining up against the biggest kid in the grade.',
+          'Quiet kids often do well, because the sport rewards listening and',
+          'repeating a skill. Prior sports help but are not required.',
+        ].join(' '),
+      },
+      {
+        id: 'faq-weight-cutting',
+        question: 'Will they have to cut weight?',
+        answer: [
+          'Not in a healthy youth program. Kids should wrestle near their natural',
+          'weight, eat normally and grow. If anyone ever suggests dehydration or',
+          'skipping meals for a youth wrestler, that is a red flag. Talk to the',
+          'coach.',
+        ].join(' '),
+      },
+      {
+        id: 'faq-competing',
+        question: 'Do they have to compete?',
+        answer: [
+          'Not on day one, and not if the family is not ready. Practice can '
+          + 'stand on its own for a while.',
+          '',
+          'When they do compete, youth brackets are grouped by age and weight. '
+          + 'First tournaments are often more about learning the routine — '
+          + 'weigh-in, warm-up, handshake — than about the win-loss record. '
+          + 'Plenty of strong wrestlers lost a lot early.',
+        ].join('\n'),
+      },
+      {
+        id: 'faq-girls',
+        question: 'Can girls wrestle?',
+        answer: [
+          'Yes. Many youth rooms are co-ed in practice. Girls can wrestle girls,',
+          'boys, or both depending on the event. The rules and equipment are the',
+          'same.',
+        ].join(' '),
+      },
+      {
+        id: 'faq-time',
+        question: 'How much time does this take?',
+        answer: [
+          'A typical youth week is two practices of about 60\u201390 minutes each.',
+          'Tournaments, if you choose them, are often Saturday mornings that can run',
+          'long. You do not have to do every extra event in year one.',
+        ].join(' '),
+      },
+      {
+        id: 'faq-cost',
+        question: 'What does it cost?',
+        answer: [
+          'Wrestling is one of the cheaper youth sports to start. Budget for:',
+          '• Club fee for the season — current rates are on the registration page',
+          '• Shoes and headgear if you are not borrowing them, roughly $50\u2013$100',
+          '• A singlet later, if the club does not issue one',
+          '• Tournament entry fees later, often $15\u2013$40 each',
+          '',
+          'Ask about scholarships, sibling discounts and used or loaner gear. '
+          + 'Kids outgrow shoes fast, so used pairs from last year\u2019s team are '
+          + 'common and perfectly fine.',
+        ].join('\n'),
+      },
+      {
+        id: 'faq-skin',
+        question: 'What about skin issues? I have heard stories.',
+        answer: [
+          'Close contact plus shared mats means hygiene matters. The simple '
+          + 'habits work:',
+          '• Clean practice clothes after every session',
+          '• Shower soon after practice',
+          '• Clean shoes worn only on the mat',
+          '• Check skin; stay home and get cleared if there is a suspicious rash',
+          '• We disinfect mats regularly',
+          '',
+          'This is housekeeping, not a reason to skip the sport.',
+        ].join('\n'),
+      },
+      {
+        id: 'faq-how-to-help',
+        question: 'I do not know anything about wrestling. How do I help?',
+        answer: [
+          'You do not need to coach from the chair.',
+          '',
+          'Helpful:',
+          '• Get them there on time, fed, with water and clean gear',
+          '• Ask “Did you have fun?” and “What did you try?” before “Did you win?”',
+          '• Let the coach be the coach',
+          '• Pack patience for tournament days — they start early and move slowly',
+          '',
+          'Unhelpful:',
+          '• Yelling technique during a match',
+          '• Comparing them to the kid who started three years ago',
+          '• Making the car ride home a film session',
+          '',
+          'Your job is ride, snack, hug, and keep the sport theirs.',
+        ].join('\n'),
+      },
+    ],
   },
 }
 
