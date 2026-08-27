@@ -49,6 +49,22 @@ async function copyReference(reference: string) {
   Notify.create({ type: 'info', message: `Copied ${reference}` })
 }
 
+const VOLUNTEER_LABELS = {
+  assistantCoach: 'Assistant Coach',
+  fundraisers: 'Fundraisers',
+  sponsorships: 'Sponsorships',
+  homeTournament: 'Home Tournament',
+} as const
+
+/** Only the roles actually ticked, as readable labels. */
+function volunteerRoles(reg: Registration): string[] {
+  const v = reg.volunteer
+  if (!v) return []
+  return (Object.keys(VOLUNTEER_LABELS) as (keyof typeof VOLUNTEER_LABELS)[])
+    .filter((key) => v[key])
+    .map((key) => VOLUNTEER_LABELS[key])
+}
+
 const statusColors: Record<RegistrationStatus, string> = {
   new: 'primary',
   contacted: 'warning',
@@ -241,6 +257,18 @@ function confirmDelete(reg: Registration) {
               <div>{{ reg.wrestler.firstName }} {{ reg.wrestler.lastName }}</div>
               <div>Born {{ reg.wrestler.dob }}</div>
               <div>Grade {{ reg.wrestler.grade }}</div>
+              <div v-if="reg.wrestler.yearsExperience">
+                Experience: {{ reg.wrestler.yearsExperience }}
+              </div>
+              <div v-if="reg.wrestler.previousClub">
+                Previous club: {{ reg.wrestler.previousClub }}
+              </div>
+              <div v-if="reg.wrestler.siblingName">
+                Sibling: {{ reg.wrestler.siblingName }}
+              </div>
+              <div v-if="reg.wrestler.usawNumber">
+                USAW #{{ reg.wrestler.usawNumber }}
+              </div>
             </div>
             <div class="col-12 col-sm-6">
               <div class="detail__label">Parent / Guardian</div>
@@ -266,6 +294,32 @@ function confirmDelete(reg: Registration) {
                 <a :href="`tel:${reg.emergency.phone}`">{{ reg.emergency.phone }}</a>
               </div>
             </div>
+            <!-- The actionable part for the club: who has offered to help. -->
+            <div v-if="reg.volunteer" class="col-12 col-sm-6">
+              <div class="detail__label">Volunteering</div>
+              <div v-if="!reg.volunteer.interested" class="text-grey-6">
+                Not interested
+              </div>
+              <template v-else>
+                <div v-if="volunteerRoles(reg).length">
+                  <q-badge
+                    v-for="role in volunteerRoles(reg)"
+                    :key="role"
+                    color="positive"
+                    class="vol-badge"
+                  >
+                    {{ role }}
+                  </q-badge>
+                </div>
+                <div v-else>Interested, no specific role chosen</div>
+              </template>
+            </div>
+
+            <div v-if="reg.referralSource" class="col-12 col-sm-6">
+              <div class="detail__label">Heard about us via</div>
+              <div>{{ reg.referralSource }}</div>
+            </div>
+
             <div v-if="reg.notes" class="col-12">
               <div class="detail__label">Notes</div>
               <div class="detail__notes">{{ reg.notes }}</div>
@@ -384,6 +438,9 @@ function confirmDelete(reg: Registration) {
 </template>
 
 <style scoped>
+.vol-badge {
+  margin: 0 4px 4px 0;
+}
 .privacy-banner {
   display: flex;
   align-items: flex-start;

@@ -276,6 +276,34 @@ export interface RegistrationWrestler {
   /** Stored as YYYY/MM/DD so it is trivially validatable in security rules. */
   dob: string
   grade: string
+  /**
+   * Free text rather than a number: "first year", "2 seasons" and "3" are all
+   * answers a parent will give, and none of them are worth rejecting.
+   */
+  yearsExperience?: string
+  previousClub?: string
+  /**
+   * A sibling already in the club. A stopgap for grouping families by hand
+   * until one submission can carry several wrestlers.
+   */
+  siblingName?: string
+  /** USA Wrestling membership number, where the wrestler already has one. */
+  usawNumber?: string
+}
+
+/**
+ * Which club jobs a family is willing to help with.
+ *
+ * Belongs to the submission rather than the wrestler: it is the parent
+ * volunteering, and a family with three wrestlers is still one set of answers.
+ * The specific roles are only meaningful when `interested` is true.
+ */
+export interface RegistrationVolunteer {
+  interested: boolean
+  assistantCoach: boolean
+  fundraisers: boolean
+  sponsorships: boolean
+  homeTournament: boolean
 }
 
 export interface RegistrationGuardian {
@@ -309,6 +337,10 @@ export interface Registration {
   address: RegistrationAddress
   emergency: RegistrationEmergency
   payment: RegistrationPayment
+  /** Absent on registrations submitted before volunteering was asked about. */
+  volunteer?: RegistrationVolunteer
+  /** "How did you hear about us?" */
+  referralSource?: string
   notes?: string
   status: RegistrationStatus
   createdAt: Timestamp
@@ -329,6 +361,8 @@ export interface RegistrationFormPayload {
   address: RegistrationAddress
   emergency: RegistrationEmergency
   payment: RegistrationPaymentInput
+  volunteer?: RegistrationVolunteer
+  referralSource?: string
   notes?: string
 }
 

@@ -26,11 +26,28 @@ const submittedReference = ref('')
 
 function emptyForm() {
   return {
-    wrestler: { firstName: '', lastName: '', dob: '', grade: '' },
+    wrestler: {
+      firstName: '',
+      lastName: '',
+      dob: '',
+      grade: '',
+      yearsExperience: '',
+      previousClub: '',
+      siblingName: '',
+      usawNumber: '',
+    },
     guardian: { firstName: '', lastName: '', email: '', phone: '' },
     address: { street: '', city: '', state: '', postalCode: '' },
     emergency: { name: '', phone: '', relationship: '' },
     payment: { method: 'zelle' as PaymentMethod, tierId: '' },
+    volunteer: {
+      interested: false,
+      assistantCoach: false,
+      fundraisers: false,
+      sponsorships: false,
+      homeTournament: false,
+    },
+    referralSource: '',
     notes: '',
   }
 }
@@ -52,6 +69,13 @@ const selectedTier = computed(() =>
 
 const amountDue = computed(() => selectedTier.value?.amount ?? 0)
 
+const volunteerRoles = [
+  { key: 'assistantCoach', label: 'Assistant Coach' },
+  { key: 'fundraisers', label: 'Coordinating Fundraisers' },
+  { key: 'sponsorships', label: 'Coordinating Sponsorships' },
+  { key: 'homeTournament', label: 'Coordinating Home Tournament' },
+] as const
+
 async function handleSubmit() {
   const f = form.value
   // Generated per submission; the payer writes it in the Zelle or cheque memo
@@ -64,6 +88,16 @@ async function handleSubmit() {
       lastName: f.wrestler.lastName.trim(),
       dob: f.wrestler.dob.trim(),
       grade: f.wrestler.grade.trim(),
+      // Spread so an unanswered optional never reaches Firestore as ''. The
+      // rules cap their length but do not require them.
+      ...(f.wrestler.yearsExperience.trim()
+        ? { yearsExperience: f.wrestler.yearsExperience.trim() } : {}),
+      ...(f.wrestler.previousClub.trim()
+        ? { previousClub: f.wrestler.previousClub.trim() } : {}),
+      ...(f.wrestler.siblingName.trim()
+        ? { siblingName: f.wrestler.siblingName.trim() } : {}),
+      ...(f.wrestler.usawNumber.trim()
+        ? { usawNumber: f.wrestler.usawNumber.trim() } : {}),
     },
     guardian: {
       firstName: f.guardian.firstName.trim(),
@@ -89,6 +123,18 @@ async function handleSubmit() {
       amountDue: amountDue.value,
       reference,
     },
+    // Always sent, so the admin inbox can distinguish "said no" from "was
+    // never asked" on older registrations.
+    volunteer: {
+      interested: f.volunteer.interested,
+      // A role can only be true if they said yes; unticking "interested"
+      // after checking roles must not leave stale flags behind.
+      assistantCoach: f.volunteer.interested && f.volunteer.assistantCoach,
+      fundraisers: f.volunteer.interested && f.volunteer.fundraisers,
+      sponsorships: f.volunteer.interested && f.volunteer.sponsorships,
+      homeTournament: f.volunteer.interested && f.volunteer.homeTournament,
+    },
+    ...(f.referralSource.trim() ? { referralSource: f.referralSource.trim() } : {}),
     ...(f.notes.trim() ? { notes: f.notes.trim() } : {}),
   })
 
@@ -224,6 +270,42 @@ async function copyReference() {
                 :rules="[required('Grade')]"
               />
             </div>
+            <div class="col-12 col-sm-6">
+              <q-input
+                v-model="form.wrestler.yearsExperience"
+                label="Years of Experience"
+                outlined
+                maxlength="40"
+                hint="e.g. first year, or 3 seasons"
+              />
+            </div>
+            <div class="col-12 col-sm-6">
+              <q-input
+                v-model="form.wrestler.previousClub"
+                label="Previous Club Attended"
+                outlined
+                maxlength="120"
+                hint="Leave blank if this is their first club"
+              />
+            </div>
+            <div class="col-12 col-sm-6">
+              <q-input
+                v-model="form.wrestler.siblingName"
+                label="Sibling in the Club"
+                outlined
+                maxlength="120"
+                hint="So we can group your family together"
+              />
+            </div>
+            <div class="col-12 col-sm-6">
+              <q-input
+                v-model="form.wrestler.usawNumber"
+                label="USAW Number"
+                outlined
+                maxlength="40"
+                hint="If they already have one"
+              />
+            </div>
           </div>
 
           <q-separator class="q-my-md" />
@@ -338,6 +420,41 @@ async function copyReference() {
 
           <q-separator class="q-my-md" />
 
+          <div class="form-section-title">Volunteering</div>
+          <p class="section-note">
+            The club runs on parent help. Nothing here is a commitment — it just
+            tells us who to ask.
+          </p>
+          <q-toggle
+            v-model="form.volunteer.interested"
+            label="I'm interested in volunteering"
+          />
+
+          <!-- The specific roles are meaningless without a yes, so they stay
+               hidden until then rather than sitting there greyed out. -->
+          <div v-if="form.volunteer.interested" class="volunteer-roles">
+            <div class="field-label">Which of these could you help with?</div>
+            <q-checkbox
+              v-for="role in volunteerRoles"
+              :key="role.key"
+              v-model="form.volunteer[role.key]"
+              :label="role.label"
+              class="volunteer-roles__item"
+            />
+          </div>
+
+          <q-separator class="q-my-md" />
+
+          <div class="form-section-title">How did you hear about us?</div>
+          <q-input
+            v-model="form.referralSource"
+            outlined
+            maxlength="200"
+            placeholder="A friend, school, social media, a tournament..."
+          />
+
+          <q-separator class="q-my-md" />
+
           <div class="form-section-title">Payment</div>
 
           <div v-if="tiers.length" class="q-mb-md">
@@ -435,6 +552,21 @@ async function copyReference() {
 </template>
 
 <style scoped>
+.section-note {
+  margin: 0 0 8px;
+  font-size: 0.88rem;
+  color: var(--grey-600, #6b7280);
+}
+
+.volunteer-roles {
+  margin-top: 10px;
+  padding-left: 4px;
+}
+
+/* One per line: these labels wrap awkwardly side by side on a phone. */
+.volunteer-roles__item {
+  display: block;
+}
 .form-section-title {
   font-family: var(--font-display);
   font-weight: 700;

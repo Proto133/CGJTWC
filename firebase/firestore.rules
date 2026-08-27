@@ -315,7 +315,8 @@ service cloud.firestore {
     function isValidRegistration() {
       let d = request.resource.data;
       return d.keys().hasOnly(['wrestler', 'guardian', 'address', 'emergency',
-                               'payment', 'notes', 'status', 'createdAt'])
+                               'payment', 'volunteer', 'referralSource',
+                               'notes', 'status', 'createdAt'])
              && d.keys().hasAll(['wrestler', 'guardian', 'address', 'emergency',
                                  'payment', 'status', 'createdAt'])
              && validWrestler(d.wrestler)
@@ -323,6 +324,9 @@ service cloud.firestore {
              && validAddress(d.address)
              && validEmergency(d.emergency)
              && validNewPayment(d.payment)
+             && (!('volunteer' in d.keys()) || validVolunteer(d.volunteer))
+             && (!('referralSource' in d.keys())
+                 || (d.referralSource is string && d.referralSource.size() <= 200))
              && (!('notes' in d.keys()) || (d.notes is string && d.notes.size() <= 2000))
              // A submission always starts as 'new'; only admins can advance it.
              && d.status == 'new'
@@ -355,6 +359,12 @@ service cloud.firestore {
              && d.address == prior.address
              && d.emergency == prior.emergency
              && d.createdAt == prior.createdAt
+             // Registrant-supplied answers, so admins must not rewrite them.
+             // get() with a default rather than a direct comparison, because
+             // registrations submitted before these fields existed have neither
+             // key and reading a missing field is an error.
+             && d.get('volunteer', {}) == prior.get('volunteer', {})
+             && d.get('referralSource', '') == prior.get('referralSource', '')
              && d.status in ['new', 'contacted', 'registered']
              // Registrations submitted before payment tracking existed have no
              // payment block; they must stay editable.
@@ -387,12 +397,37 @@ service cloud.firestore {
 
     function validWrestler(w) {
       return w is map
-             && w.keys().hasOnly(['firstName', 'lastName', 'dob', 'grade'])
+             && w.keys().hasOnly(['firstName', 'lastName', 'dob', 'grade',
+                                  'yearsExperience', 'previousClub',
+                                  'siblingName', 'usawNumber'])
              && w.keys().hasAll(['firstName', 'lastName', 'dob', 'grade'])
              && w.firstName is string && w.firstName.size() > 0 && w.firstName.size() <= 60
              && w.lastName is string && w.lastName.size() > 0 && w.lastName.size() <= 60
              && w.dob is string && w.dob.matches('^[0-9]{4}/[0-9]{2}/[0-9]{2}$')
-             && w.grade is string && w.grade.size() > 0 && w.grade.size() <= 20;
+             && w.grade is string && w.grade.size() > 0 && w.grade.size() <= 20
+             && (!('yearsExperience' in w.keys())
+                 || (w.yearsExperience is string && w.yearsExperience.size() <= 40))
+             && (!('previousClub' in w.keys())
+                 || (w.previousClub is string && w.previousClub.size() <= 120))
+             && (!('siblingName' in w.keys())
+                 || (w.siblingName is string && w.siblingName.size() <= 120))
+             && (!('usawNumber' in w.keys())
+                 || (w.usawNumber is string && w.usawNumber.size() <= 40));
+    }
+
+    // Every flag must be present so the shape is predictable in the admin UI;
+    // the individual roles only carry meaning when `interested` is true.
+    function validVolunteer(v) {
+      return v is map
+             && v.keys().hasOnly(['interested', 'assistantCoach', 'fundraisers',
+                                  'sponsorships', 'homeTournament'])
+             && v.keys().hasAll(['interested', 'assistantCoach', 'fundraisers',
+                                 'sponsorships', 'homeTournament'])
+             && v.interested is bool
+             && v.assistantCoach is bool
+             && v.fundraisers is bool
+             && v.sponsorships is bool
+             && v.homeTournament is bool;
     }
 
     function validGuardian(g) {
