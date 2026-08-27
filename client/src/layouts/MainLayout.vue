@@ -23,9 +23,11 @@ const mailtoHref = computed(() => settings.mailtoHref);
 const copyright = computed(() => settings.copyrightLine);
 
 // Register is deliberately not a nav link; it gets a prominent button instead.
-// Note this list is now seven items, which is about the limit before the
-// desktop toolbar starts to crowd. Anything further should go in the footer or
-// behind a grouped menu rather than being appended here.
+//
+// Seven items is about the limit before the desktop toolbar crowds, so this
+// list is full. Anything further goes in `extraLinks` below until the nav
+// structure is reworked — whether that is grouped dropdowns or a drawer on all
+// viewports is still an open decision.
 const navLinks = [
   { label: 'Home', to: '/', icon: 'home' },
   { label: 'About', to: '/about', icon: 'info' },
@@ -35,6 +37,16 @@ const navLinks = [
   { label: 'FAQ', to: '/faq', icon: 'help_outline' },
   { label: 'Contact', to: '/contact', icon: 'mail' },
 ];
+
+// Reachable from the drawer and the footer but not the desktop toolbar, which
+// has no room left. Deliberately visible on mobile, where the drawer is a list
+// and one more entry costs nothing.
+const extraLinks = [
+  { label: 'Resources', to: '/links', icon: 'link' },
+];
+
+/** Every destination, for the footer, which should be complete and flat. */
+const allLinks = [...navLinks, ...extraLinks];
 
 function toggleDrawer() {
   leftDrawerOpen.value = !leftDrawerOpen.value;
@@ -122,7 +134,7 @@ function isActive(to: string) {
 
       <q-list padding>
         <q-item
-          v-for="link in navLinks"
+          v-for="link in allLinks"
           :key="link.to"
           :to="link.to"
           clickable
@@ -197,7 +209,7 @@ function isActive(to: string) {
         <nav class="footer-col" aria-label="Footer navigation">
           <div class="footer-col__heading">Explore</div>
           <router-link
-            v-for="link in navLinks"
+            v-for="link in allLinks"
             :key="link.to"
             :to="link.to"
             class="footer-link tap-target"

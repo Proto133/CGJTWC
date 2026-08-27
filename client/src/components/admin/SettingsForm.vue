@@ -131,6 +131,36 @@ function onAdditionalToggle(index: number, value: boolean) {
 const unpairedAdditional = computed(() =>
   form.value.payment.tiers.filter((t) => t.additional && !t.appliesTo))
 
+function addLink() {
+  form.value.content.links.push({
+    id: `link-${Date.now().toString(36)}`,
+    label: '',
+    url: '',
+    description: '',
+  })
+}
+
+function removeLink(index: number) {
+  form.value.content.links.splice(index, 1)
+}
+
+function moveLink(index: number, delta: number) {
+  const list = form.value.content.links
+  const target = index + delta
+  if (target < 0 || target >= list.length) return
+  const [item] = list.splice(index, 1)
+  if (item) list.splice(target, 0, item)
+}
+
+/**
+ * Anything that will be silently dropped by the public page, so an admin is
+ * told here rather than wondering why a link never appeared.
+ */
+const invalidLinks = computed(() =>
+  form.value.content.links.filter(
+    (l) => l.label.trim() !== '' && !/^https?:\/\//i.test(l.url.trim()),
+  ))
+
 function addFaq() {
   form.value.content.faqs.push({
     // Generated once, so reordering or rewording does not remount panels or
@@ -468,6 +498,97 @@ function moveFaq(index: number, delta: number) {
               </div>
             </div>
             <q-btn flat dense no-caps icon="add" label="Add tier" @click="addTier" />
+          </div>
+        </div>
+      </q-expansion-item>
+
+      <q-separator />
+
+      <!-- Useful links -->
+      <q-expansion-item label="Useful links" icon="link">
+        <div class="q-pa-md q-gutter-md">
+          <div class="settings-note settings-note--inline">
+            Shown at <code>/links</code> in this order. Only addresses starting
+            <code>http://</code> or <code>https://</code> are published — that
+            guard stops a pasted script URL becoming a live link on the site.
+          </div>
+
+          <q-input
+            v-model="form.content.linksIntro"
+            type="textarea"
+            label="Intro paragraph (optional)"
+            outlined
+            autogrow
+          />
+
+          <div v-if="invalidLinks.length" class="tier-warning">
+            <q-icon name="warning" size="16px" class="q-mr-xs" />
+            {{ invalidLinks.length }} link{{ invalidLinks.length === 1 ? '' : 's' }}
+            will not be published: the address must start with http:// or https://.
+          </div>
+
+          <div>
+            <div class="field-group-label">Links</div>
+            <div
+              v-for="(link, index) in form.content.links"
+              :key="link.id"
+              class="tier-row"
+            >
+              <div class="row items-center q-gutter-xs q-mb-xs">
+                <span class="faq-index">{{ index + 1 }}</span>
+                <q-space />
+                <q-btn
+                  flat
+                  round
+                  dense
+                  icon="arrow_upward"
+                  :disable="index === 0"
+                  :aria-label="`Move link ${index + 1} up`"
+                  @click="moveLink(index, -1)"
+                />
+                <q-btn
+                  flat
+                  round
+                  dense
+                  icon="arrow_downward"
+                  :disable="index === form.content.links.length - 1"
+                  :aria-label="`Move link ${index + 1} down`"
+                  @click="moveLink(index, 1)"
+                />
+                <q-btn
+                  flat
+                  round
+                  dense
+                  icon="delete"
+                  color="negative"
+                  :aria-label="`Remove link ${index + 1}`"
+                  @click="removeLink(index)"
+                />
+              </div>
+              <div class="row q-col-gutter-sm">
+                <div class="col-12 col-sm-5">
+                  <q-input v-model="link.label" outlined dense label="Label" />
+                </div>
+                <div class="col-12 col-sm-7">
+                  <q-input
+                    v-model="link.url"
+                    outlined
+                    dense
+                    label="URL"
+                    placeholder="https://"
+                  />
+                </div>
+                <div class="col-12">
+                  <q-input
+                    v-model="link.description"
+                    outlined
+                    dense
+                    label="Description (optional)"
+                  />
+                </div>
+              </div>
+            </div>
+            <q-btn flat dense no-caps icon="add" label="Add link" @click="addLink" />
           </div>
         </div>
       </q-expansion-item>

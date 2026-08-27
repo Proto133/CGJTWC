@@ -88,6 +88,21 @@ export interface FaqItem {
   answer: string
 }
 
+/**
+ * An outbound link on the resources page.
+ *
+ * Only http(s) URLs are ever rendered — see LinksPage. That guard exists
+ * because these are admin-editable, and a `javascript:` URL in an href would
+ * otherwise execute in a visitor's browser.
+ */
+export interface ExternalLink {
+  id: string
+  label: string
+  url: string
+  /** One line on what the site is for; shown under the label. */
+  description: string
+}
+
 export interface OrganizationContent {
   /** Short teaser used in the About section on the home page. */
   aboutTeaser: string
@@ -106,6 +121,10 @@ export interface OrganizationContent {
   faqs: FaqItem[]
   /** Optional lead paragraph above the questions. */
   faqIntro: string
+  /** Outbound links shown in order on /links. */
+  links: ExternalLink[]
+  /** Optional lead paragraph above the links. */
+  linksIntro: string
 }
 
 /** One row of the registration pricing table. */
@@ -255,6 +274,48 @@ export const defaultOrganization: OrganizationSettings = {
     ctaText: 'New wrestlers and families are always welcome.',
     contactIntro:
       'Questions about the program, registration or volunteering? Reach out anytime.',
+    linksIntro:
+      'The sites families use most often during the season. These are run by '
+      + 'other organisations, so their sign-in and support are handled on their '
+      + 'end — ask a coach if you get stuck.',
+    // Editable from Admin > Settings > Useful links. Descriptions are a starting
+    // point and worth a check by someone who uses each site regularly.
+    links: [
+      {
+        id: 'link-usaw',
+        label: 'USA Wrestling membership',
+        url: 'https://www.usawmembership.com/login',
+        description:
+          'Create or renew a USA Wrestling card. Most tournaments require a '
+          + 'current membership.',
+      },
+      {
+        id: 'link-ikwf',
+        label: 'IKWF',
+        url: 'https://www.ikwf.org/',
+        description:
+          'Illinois Kids Wrestling Federation — rules, age and weight classes, '
+          + 'and the Illinois state series.',
+      },
+      {
+        id: 'link-trackwrestling',
+        label: 'Trackwrestling',
+        url: 'https://www.trackwrestling.com/TWHome.jsp?loadBalanced=true',
+        description: 'Event registration, brackets and live results.',
+      },
+      {
+        id: 'link-usabracketing',
+        label: 'USA Bracketing',
+        url: 'https://www.usabracketing.com/login',
+        description: 'Registration and brackets for some events.',
+      },
+      {
+        id: 'link-flowrestling',
+        label: 'FloWrestling',
+        url: 'https://www.flowrestling.org/',
+        description: 'Wrestling news and streaming coverage. Subscription.',
+      },
+    ],
     faqIntro:
       'Answers to what parents ask us most. If yours is not here, get in touch.',
     // Starter content, editable from Admin > Settings > FAQ.
