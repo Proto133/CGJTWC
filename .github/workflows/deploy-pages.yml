@@ -69,6 +69,17 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
         run: npx quasar build
 
+      - name: Mark the preview as noindex
+        # This build is a byte-for-byte duplicate of the live site at
+        # trojanswrestlingclub.com. Without this it competes with the real
+        # domain in search results, and a parent could land on the preview,
+        # where admin sign-in also fails because proto133.github.io is not an
+        # authorised Auth domain. Injected here rather than in index.html so
+        # the production build is unaffected.
+        run: |
+          sed -i 's|<head>|<head><meta name="robots" content="noindex,nofollow">|' dist/spa/index.html
+          grep -q 'noindex' dist/spa/index.html
+
       - name: Add SPA fallback
         # GitHub Pages has no rewrite rule, so a deep link such as
         # /CGJTWC/staff would 404 on refresh. Pages serves 404.html for unknown

@@ -343,7 +343,10 @@ Optional repository variables: `X_HANDLE` (defaults to `CaryTrojansWC`),
 The component tries each in turn:
 
 1. **API posts** from `social/xFeed` — rendered natively. When these exist the
-   page loads no third-party script at all.
+   page loads no third-party script at all. The component waits for the
+   Firestore listener's first response before deciding, because at mount the
+   feed is always empty and deciding then would request the widget script every
+   time.
 2. **Featured posts** — post URLs set in Admin → Settings → Social accounts,
    embedded with X's `createTweet`. Useful before the job first runs, or to pin
    something specific.

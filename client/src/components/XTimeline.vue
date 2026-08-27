@@ -259,12 +259,16 @@ function whenReady(cb: () => void) {
 }
 
 /**
- * Only pulls in the third-party script when we actually need it. Once the
- * scheduled job has populated Firestore this never runs, so the home page
- * makes no request to X at all.
+ * Only pulls in the third-party script when we actually need it.
+ *
+ * The `xFeed.loaded` guard is the important part. At mount the Firestore feed
+ * has not answered yet, so `usesWidget` is always true and deciding here would
+ * request the script every single time, even when posts were about to arrive.
+ * Waiting for the listener's first response means a populated feed results in
+ * no request to X at all.
  */
 function startWidget() {
-  if (!usesWidget.value) return
+  if (!xFeed.loaded || !usesWidget.value) return
   whenReady(() => {
     void renderWidget()
   })
@@ -275,12 +279,12 @@ onMounted(() => {
   // small filtered query, and other pages may show the feed later.
   xFeed.subscribe()
   xMentions.subscribeApproved()
-  startWidget()
+  // Deliberately not starting the widget here; the feed has not replied yet.
 })
 
 // Settings and the cached feed both arrive from Firestore after mount, so the
 // first pass can happen with neither. Re-evaluate when any of them lands.
-watch([handle, featuredPosts, usesWidget], () => {
+watch([handle, featuredPosts, usesWidget, () => xFeed.loaded], () => {
   if (!usesWidget.value) {
     // API posts arrived; abandon any widget work still in flight.
     renderToken += 1
@@ -288,6 +292,9 @@ watch([handle, featuredPosts, usesWidget], () => {
     unavailable.value = false
     return
   }
+  // Still waiting to hear whether there are posts.
+  if (!xFeed.loaded) return
+
   if (!getTwttr()?.widgets) {
     startWidget()
     return
