@@ -22,31 +22,29 @@ const socialLinks = computed(() => settings.socialLinks);
 const mailtoHref = computed(() => settings.mailtoHref);
 const copyright = computed(() => settings.copyrightLine);
 
-// Register is deliberately not a nav link; it gets a prominent button instead.
-//
-// Seven items is about the limit before the desktop toolbar crowds, so this
-// list is full. Anything further goes in `extraLinks` below until the nav
-// structure is reworked — whether that is grouped dropdowns or a drawer on all
-// viewports is still an open decision.
-const navLinks = [
+// Every destination, in the order the drawer and footer list them. This is the
+// single source of truth: the drawer holds all of it, so adding a page means
+// adding one entry here and nothing else.
+const allLinks = [
   { label: 'Home', to: '/', icon: 'home' },
   { label: 'About', to: '/about', icon: 'info' },
   { label: 'Staff', to: '/staff', icon: 'groups' },
   { label: 'Schedule', to: '/schedule', icon: 'event' },
   { label: 'Announcements', to: '/announcements', icon: 'campaign' },
   { label: 'FAQ', to: '/faq', icon: 'help_outline' },
+  { label: 'Resources', to: '/links', icon: 'link' },
   { label: 'Contact', to: '/contact', icon: 'mail' },
 ];
 
-// Reachable from the drawer and the footer but not the desktop toolbar, which
-// has no room left. Deliberately visible on mobile, where the drawer is a list
-// and one more entry costs nothing.
-const extraLinks = [
-  { label: 'Resources', to: '/links', icon: 'link' },
-];
-
-/** Every destination, for the footer, which should be complete and flat. */
-const allLinks = [...navLinks, ...extraLinks];
+// The few links kept visible in the header. Everything else lives behind the
+// drawer button, which is why this stays short: the point is that the toolbar
+// never grows as pages are added.
+//
+// Schedule earns a slot because it is the page families return to most; About
+// is the entry point for anyone deciding whether to join. Register is a button
+// rather than a link, and Admin is drawer-only since visitors never need it.
+const PRIMARY_PATHS = ['/', '/about', '/schedule'];
+const primaryLinks = allLinks.filter((link) => PRIMARY_PATHS.includes(link.to));
 
 function toggleDrawer() {
   leftDrawerOpen.value = !leftDrawerOpen.value;
@@ -83,7 +81,7 @@ function isActive(to: string) {
              windows. -->
         <nav class="gt-sm desktop-nav">
           <router-link
-            v-for="link in navLinks"
+            v-for="link in primaryLinks"
             :key="link.to"
             :to="link.to"
             class="nav-link tap-target"
@@ -93,21 +91,10 @@ function isActive(to: string) {
           </router-link>
 
           <q-btn to="/register" unelevated no-caps class="register-btn q-ml-sm" label="Register" />
-
-          <q-btn
-            to="/admin"
-            flat
-            round
-            dense
-            class="admin-icon-btn q-ml-xs"
-            icon="admin_panel_settings"
-            aria-label="Admin"
-          >
-            <q-tooltip>Admin</q-tooltip>
-          </q-btn>
         </nav>
 
-        <!-- Mobile hamburger -->
+        <!-- Shown at every width, not just mobile: the drawer is now the only
+             route to Staff, Announcements, FAQ, Resources and Contact. -->
         <q-btn
           flat
           round
@@ -115,14 +102,15 @@ function isActive(to: string) {
           icon="menu"
           color="white"
           size="md"
-          class="lt-md"
+          class="q-ml-sm"
           aria-label="Open navigation menu"
           @click="toggleDrawer"
         />
       </q-toolbar>
     </q-header>
 
-    <!-- Mobile Drawer -->
+    <!-- Navigation drawer. behaviour="mobile" keeps it an overlay at every
+         width rather than pushing the page aside on wide screens. -->
     <q-drawer v-model="leftDrawerOpen" side="right" overlay behavior="mobile" :width="284">
       <div class="drawer-head">
         <img :src="logoUrl" alt="" class="drawer-logo" />
@@ -358,16 +346,6 @@ function isActive(to: string) {
 
 .register-btn:hover {
   background: rgba(255, 255, 255, 0.88);
-}
-
-.admin-icon-btn {
-  color: rgba(255, 255, 255, 0.7);
-  min-height: 44px;
-  min-width: 44px;
-}
-
-.admin-icon-btn:hover {
-  color: #fff;
 }
 
 .drawer-item--cta {
