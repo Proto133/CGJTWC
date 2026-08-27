@@ -524,7 +524,6 @@ async function copyReference() {
               :key="role.key"
               v-model="form.volunteer[role.key]"
               :label="role.label"
-              class="volunteer-roles__item"
             />
           </div>
 
@@ -669,9 +668,25 @@ async function copyReference() {
   color: var(--grey-600, #6b7280);
 }
 
+/*
+ * One per line, stacked from the container rather than the checkbox.
+ * QCheckbox is itself an inline-flex holding the box and its label, so a
+ * `display: block` on the component collapses that layout and drops the label
+ * onto the line below the box. Stacking here leaves the component intact.
+ */
 .volunteer-roles {
   margin-top: 10px;
   padding-left: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+/* The heading is a flex child now, so it needs its own full width. */
+.volunteer-roles .field-label {
+  width: 100%;
+  margin-bottom: 2px;
 }
 
 .wrestler-block {
@@ -724,10 +739,6 @@ async function copyReference() {
   color: var(--grey-600, #6b7280);
 }
 
-/* One per line: these labels wrap awkwardly side by side on a phone. */
-.volunteer-roles__item {
-  display: block;
-}
 .form-section-title {
   font-family: var(--font-display);
   font-weight: 700;
