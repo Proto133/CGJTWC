@@ -60,10 +60,6 @@ export interface OrganizationSocial {
    * Now a manual override rather than the main path: posts fetched through the
    * API take priority, and these only render when the fetch job has not
    * populated social/xFeed. Useful for pinning something before the first run.
-   *
-   * Keep the default empty. mergeSection treats an empty array as "not set",
-   * so a non-empty default cannot be cleared from the dashboard — clearing the
-   * list there would silently fall back to whatever is listed here.
    */
   featuredPosts: string[]
 }
@@ -328,11 +324,6 @@ export const defaultOrganization: OrganizationSettings = {
     // would hard-wrap it at that width on every screen, breaking sentences
     // mid-flow on a phone. Concatenate prose with '+' and reserve array
     // entries for whole paragraphs, blank lines and individual bullets.
-    //
-    // Caveat: because mergeSection treats an empty array as "not set", deleting
-    // every question in the dashboard falls back to this list rather than
-    // showing none. Removing individual entries works fine. See the note on
-    // OrganizationSocial.featuredPosts for the same trap.
     faqs: [
       {
         id: 'faq-experience',

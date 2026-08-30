@@ -4,6 +4,7 @@ import { doc, onSnapshot, setDoc, deleteDoc, serverTimestamp } from 'firebase/fi
 import { db } from 'src/firebase'
 import { Notify } from 'quasar'
 import { errorMessage } from 'src/utils/errors'
+import { mergeSection } from 'src/utils/mergeSettings'
 import {
   defaultOrganization,
   buildSocialLinks,
@@ -22,26 +23,6 @@ type SettingsOverride = {
   [K in keyof OrganizationSettings]?: Partial<OrganizationSettings[K]>
 }
 
-/**
- * Merges an override section over its defaults, ignoring keys whose value is
- * absent or an empty string. That is what makes a blank field in the admin form
- * fall back to the value in organization.ts rather than blanking the site.
- * Arrays are replaced wholesale, since a venue list is edited as a unit.
- */
-function mergeSection<T extends object>(defaults: T, override?: Partial<T>): T {
-  if (!override) return defaults
-  const result = { ...defaults }
-
-  for (const key of Object.keys(override) as (keyof T)[]) {
-    const value = override[key]
-    if (value === undefined || value === null) continue
-    if (typeof value === 'string' && value.trim() === '') continue
-    if (Array.isArray(value) && value.length === 0) continue
-    result[key] = value as T[keyof T]
-  }
-
-  return result
-}
 
 export const useSettingsStore = defineStore('settings', () => {
   const override = ref<SettingsOverride | null>(null)
