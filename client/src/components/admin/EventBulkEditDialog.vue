@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useEventsStore } from 'stores/events'
+import TimeField from 'components/admin/TimeField.vue'
 import { EVENT_TYPES } from 'src/utils/eventsCsv'
 import { ALL_GROUPS, cleanGroup, isAllGroups } from 'src/utils/eventGroups'
 import type { EventFormPayload, EventType } from 'src/types'
@@ -186,42 +187,16 @@ async function apply() {
               :disable="!enabled.times"
             />
             <div class="time-pair">
-              <q-input
+              <TimeField
                 v-model="values.startTime"
-                outlined
-                dense
-                mask="time"
-                :rules="['time']"
-                hide-bottom-space
                 label="Start"
                 :disable="!enabled.times || values.allDay"
-              >
-                <template #append>
-                  <q-icon name="access_time" class="cursor-pointer">
-                    <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                      <q-time v-model="values.startTime" />
-                    </q-popup-proxy>
-                  </q-icon>
-                </template>
-              </q-input>
-              <q-input
+              />
+              <TimeField
                 v-model="values.endTime"
-                outlined
-                dense
-                mask="time"
-                :rules="['time']"
-                hide-bottom-space
                 label="End"
                 :disable="!enabled.times || values.allDay"
-              >
-                <template #append>
-                  <q-icon name="access_time" class="cursor-pointer">
-                    <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                      <q-time v-model="values.endTime" />
-                    </q-popup-proxy>
-                  </q-icon>
-                </template>
-              </q-input>
+              />
             </div>
             <div v-if="endWithoutStart" class="field-error">
               Add a start time, or clear the end time.

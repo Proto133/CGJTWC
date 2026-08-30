@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useEventsStore } from 'stores/events'
+import TimeField from 'components/admin/TimeField.vue'
 import { ALL_GROUPS, cleanGroup, isAllGroups } from 'src/utils/eventGroups'
 import { formatTime, isStoredTime, parseTimeCell } from 'src/utils/eventTimes'
 import { formatUsDate, parseUsDate } from 'src/utils/usDate'
@@ -223,42 +224,18 @@ defineExpose({ reset })
         <q-checkbox v-model="form.allDay" label="All day" dense class="q-mb-sm" />
         <div class="row q-col-gutter-sm">
           <div class="col-6">
-            <q-input
+            <TimeField
               v-model="form.startTime"
               label="Start"
-              mask="time"
-              :rules="['time']"
-              hide-bottom-space
               :disable="form.allDay"
-              outlined
-            >
-              <template #append>
-                <q-icon name="access_time" class="cursor-pointer">
-                  <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                    <q-time v-model="form.startTime" />
-                  </q-popup-proxy>
-                </q-icon>
-              </template>
-            </q-input>
+            />
           </div>
           <div class="col-6">
-            <q-input
+            <TimeField
               v-model="form.endTime"
               label="End"
-              mask="time"
-              :rules="['time']"
-              hide-bottom-space
               :disable="form.allDay"
-              outlined
-            >
-              <template #append>
-                <q-icon name="access_time" class="cursor-pointer">
-                  <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                    <q-time v-model="form.endTime" />
-                  </q-popup-proxy>
-                </q-icon>
-              </template>
-            </q-input>
+            />
           </div>
         </div>
 
