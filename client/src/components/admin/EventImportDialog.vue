@@ -20,6 +20,7 @@ const store = useEventsStore()
 const file = ref<File | null>(null)
 const rows = ref<ParsedEventRow[]>([])
 const fatalError = ref<string | null>(null)
+const unknownColumns = ref<string[]>([])
 const skipDuplicates = ref(true)
 const parsing = ref(false)
 
@@ -51,6 +52,7 @@ function reset() {
   file.value = null
   rows.value = []
   fatalError.value = null
+  unknownColumns.value = []
   parsing.value = false
 }
 
@@ -67,6 +69,7 @@ watch(() => props.modelValue, (open) => {
 async function onFile(picked: File | null) {
   rows.value = []
   fatalError.value = null
+  unknownColumns.value = []
   if (!picked) return
 
   parsing.value = true
@@ -77,6 +80,7 @@ async function onFile(picked: File | null) {
     const result = parseEventsCsv(text, store.events)
     rows.value = result.rows
     fatalError.value = result.fatalError
+    unknownColumns.value = result.unknownColumns
   } catch {
     fatalError.value = 'That file could not be read. Is it still open in Excel?'
   } finally {
@@ -215,6 +219,23 @@ function exportCurrent() {
           {{ fatalError }}
         </q-banner>
 
+        <!-- A renamed or misspelled header would otherwise mean a whole column
+             of data quietly never arrives, and the import would look fine. -->
+        <q-banner v-if="unknownColumns.length" dense class="bg-amber-1 text-dark">
+          <template #avatar>
+            <q-icon name="warning" color="warning" />
+          </template>
+          <span v-if="unknownColumns.length === 1">
+            The column "{{ unknownColumns[0] }}" was not recognised, so it was
+            ignored.
+          </span>
+          <span v-else>
+            These columns were not recognised, so they were ignored:
+            {{ unknownColumns.join(', ') }}.
+          </span>
+          Check the spelling against "What each column expects" above.
+        </q-banner>
+
         <!-- Step 3 -->
         <div v-if="rows.length > 0">
           <div class="step-label">3. Check the preview</div>
@@ -262,6 +283,7 @@ function exportCurrent() {
                     {{ row.raw.date }}
                     <template v-if="row.raw.time"> · {{ row.raw.time }}</template>
                     <template v-if="row.raw.type"> · {{ row.raw.type }}</template>
+                    <template v-if="row.raw.group"> · {{ row.raw.group }}</template>
                     <template v-if="row.raw.location"> · {{ row.raw.location }}</template>
                   </span>
                 </div>

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import {
   collection,
   onSnapshot,
@@ -16,7 +16,8 @@ import {
 import { db } from 'src/firebase'
 import { Notify } from 'quasar'
 import { errorMessage } from 'src/utils/errors'
-import type { Event, EventType, EventFormPayload } from 'src/types'
+import { squadsInUse } from 'src/utils/eventGroups'
+import type { Event, EventFormPayload } from 'src/types'
 
 export const useEventsStore = defineStore('events', () => {
   const events = ref<Event[]>([])
@@ -53,15 +54,10 @@ export const useEventsStore = defineStore('events', () => {
     }
   }
 
-  async function createEvent(payload: {
-    title: string
-    date: Date
-    time?: string
-    location: string
-    type: EventType
-    opponent?: string
-    description?: string
-  }) {
+  // Typed off EventFormPayload rather than restating the fields: the inline
+  // shape this replaced had already fallen a field behind when `group` was
+  // added, which silently dropped it on create.
+  async function createEvent(payload: EventFormPayload) {
     try {
       await addDoc(collection(db, 'events'), {
         ...payload,
@@ -236,24 +232,44 @@ export const useEventsStore = defineStore('events', () => {
     }
   }
 
+  /**
+   * The distinct squad names across the whole schedule, e.g. ['NS', 'TBI'].
+   *
+   * Derived rather than configured, which is what makes the free-text group
+   * field workable: filter chips and the form's suggestions both come from
+   * here, so a renamed squad propagates with no migration and no settings edit.
+   */
+  const squads = computed(() => squadsInUse(events.value))
+
+  /**
+   * Midnight this morning, not the current instant.
+   *
+   * An event's time is free text ("All Day", "4:15-5:15"), so there is no
+   * knowing when it ends. Comparing against `now` moved today's tournament into
+   * "Past" the moment its start time passed — or immediately, for a date-only
+   * event stored at midnight. An event stays upcoming for the whole of its day.
+   */
+  function startOfToday() {
+    const now = new Date()
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  }
+
   // Computed helpers
   const upcomingEvents = () => {
-    const now = new Date()
-    return events.value.filter((e) => {
-      const eventDate = e.date.toDate()
-      return eventDate >= now
-    })
+    const cutoff = startOfToday()
+    return events.value.filter((e) => e.date.toDate() >= cutoff)
   }
 
   const pastEvents = () => {
-    const now = new Date()
-    return events.value.filter((e) => e.date.toDate() < now)
+    const cutoff = startOfToday()
+    return events.value.filter((e) => e.date.toDate() < cutoff)
   }
 
   return {
     events,
     loading,
     bulkWorking,
+    squads,
     subscribe,
     unsubscribeFromEvents,
     createEvent,

@@ -7,6 +7,7 @@ import AnnouncementCard from 'components/AnnouncementCard.vue'
 import XTimeline from 'components/XTimeline.vue'
 import { useSettingsStore } from 'stores/settings'
 import { assetUrl } from 'src/utils/assets'
+import type { EventType } from 'src/types'
 
 const watermarkUrl = assetUrl('assets/JTWC-white-512.png')
 const settings = useSettingsStore()
@@ -14,7 +15,25 @@ const org = computed(() => settings.org)
 const eventsStore = useEventsStore()
 const announcementsStore = useAnnouncementsStore()
 
-const upcoming = computed(() => eventsStore.upcomingEvents().slice(0, 3))
+/**
+ * The next three events, plus the next competition if none of them is one.
+ *
+ * With two squads practising twice a week, the next three events are almost
+ * always three practices, so a plain slice would hide every tournament from the
+ * home page for the entire season. The extra card is only added when needed,
+ * which keeps the usual case to a tidy row of three.
+ */
+const upcoming = computed(() => {
+  const all = eventsStore.upcomingEvents()
+  const next = all.slice(0, 3)
+  const isCompetition = (type: EventType) => type === 'tournament' || type === 'dual'
+
+  if (next.some((event) => isCompetition(event.type))) return next
+
+  const competition = all.slice(3).find((event) => isCompetition(event.type))
+  return competition ? [...next, competition] : next
+})
+
 const latestAnnouncements = computed(() => announcementsStore.announcements.slice(0, 3))
 
 onMounted(() => {
@@ -106,7 +125,7 @@ onUnmounted(() => {
 
         <div v-if="upcoming.length" class="row q-col-gutter-md q-mt-sm">
           <div v-for="event in upcoming" :key="event.id" class="col-12 col-sm-6 col-md-4">
-            <EventCard :event="event" />
+            <EventCard :event="event" :known-squads="eventsStore.squads" />
           </div>
         </div>
         <div v-else class="empty-state q-mt-sm">

@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { useEventsStore } from 'stores/events'
 import { EVENT_TYPES } from 'src/utils/eventsCsv'
+import { ALL_GROUPS, cleanGroup, isAllGroups } from 'src/utils/eventGroups'
 import type { EventFormPayload, EventType } from 'src/types'
 
 const props = defineProps<{
@@ -27,6 +28,7 @@ const enabled = ref({
   time: false,
   location: false,
   type: false,
+  group: false,
   opponent: false,
   description: false,
 })
@@ -35,12 +37,14 @@ const values = ref<{
   time: string
   location: string
   type: EventType
+  group: string
   opponent: string
   description: string
 }>({
   time: '',
   location: '',
   type: 'practice',
+  group: '',
   opponent: '',
   description: '',
 })
@@ -50,6 +54,7 @@ function reset() {
     time: false,
     location: false,
     type: false,
+    group: false,
     opponent: false,
     description: false,
   }
@@ -57,10 +62,21 @@ function reset() {
     time: '',
     location: '',
     type: 'practice',
+    group: '',
     opponent: '',
     description: '',
   }
 }
+
+const groupSuggestions = computed(() => [ALL_GROUPS, ...store.squads])
+
+// q-select's clearable writes null, which the string-typed state cannot hold.
+const groupModel = computed({
+  get: () => values.value.group,
+  set: (value: string | null) => {
+    values.value.group = value ?? ''
+  },
+})
 
 watch(() => props.modelValue, (open) => {
   if (!open) reset()
@@ -71,6 +87,10 @@ const changes = computed<Partial<EventFormPayload>>(() => {
   if (enabled.value.time) out.time = values.value.time.trim()
   if (enabled.value.location) out.location = values.value.location.trim()
   if (enabled.value.type) out.type = values.value.type
+  if (enabled.value.group) {
+    const group = values.value.group
+    out.group = isAllGroups(group) ? ALL_GROUPS : cleanGroup(group)
+  }
   if (enabled.value.opponent) out.opponent = values.value.opponent.trim()
   if (enabled.value.description) out.description = values.value.description.trim()
   return out
@@ -154,6 +174,30 @@ async function apply() {
             outlined
             dense
             :disable="!enabled.type"
+            class="field-row__input"
+          />
+        </div>
+
+        <div class="field-row">
+          <q-checkbox
+            v-model="enabled.group"
+            dense
+            label="Squad / Group"
+            class="field-row__tick"
+          />
+          <q-select
+            v-model="groupModel"
+            :options="groupSuggestions"
+            outlined
+            dense
+            clearable
+            use-input
+            fill-input
+            hide-selected
+            new-value-mode="add-unique"
+            input-debounce="0"
+            :disable="!enabled.group"
+            hint="ALL for both squads. Leave empty to clear it"
             class="field-row__input"
           />
         </div>

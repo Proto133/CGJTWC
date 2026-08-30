@@ -9,6 +9,18 @@ export interface Event {
   type: 'practice' | 'dual' | 'tournament' | 'other'
   opponent?: string
   description?: string
+  /**
+   * Which squad an event is for: TBI (Tot/Bantam/Intermediate), NS
+   * (Novice/Senior), or 'ALL' for both.
+   *
+   * Absent or blank is not the same as 'ALL' — it means no squad was recorded,
+   * and the event is badged with no squad at all. See src/utils/eventGroups.ts.
+   *
+   * Free text rather than an enum on purpose: the club's own naming was still
+   * settling when this was added, and squad options are derived from the values
+   * actually in use, so renaming a squad needs no migration.
+   */
+  group?: string
   createdAt: Timestamp
   updatedAt: Timestamp
 }
@@ -179,6 +191,7 @@ export interface EventFormPayload {
   type: EventType
   opponent?: string
   description?: string
+  group?: string
 }
 
 export interface AnnouncementFormPayload {

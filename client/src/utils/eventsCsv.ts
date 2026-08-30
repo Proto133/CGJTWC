@@ -1,4 +1,5 @@
 import type { Event, EventFormPayload, EventType } from 'src/types'
+import { ALL_GROUPS, cleanGroup, isAllGroups } from 'src/utils/eventGroups'
 
 /**
  * Bulk event import from a spreadsheet.
@@ -71,6 +72,22 @@ export const EVENT_COLUMNS: ColumnSpec[] = [
     hint: EVENT_TYPES.join(' / '),
   },
   {
+    key: 'group',
+    header: 'Group (TBI/NS)',
+    // Generous, because this column was added to the club's template after the
+    // importer was written and the wording may yet be shortened.
+    aliases: [
+      'group',
+      'age group',
+      'division',
+      'squad',
+      'group(tbi/ns)',
+      'tbi/ns',
+    ],
+    required: false,
+    hint: 'TBI, NS, or ALL for both. Leave blank to badge no squad',
+  },
+  {
     key: 'opponent',
     header: 'Opponent (if applicable)',
     aliases: ['opponent'],
@@ -92,6 +109,7 @@ interface EventCsvRecord {
   time: string
   type: string
   location: string
+  group: string
   opponent: string
   description: string
 }
@@ -116,13 +134,20 @@ export interface ParsedEventRow {
  * their own rows but forgets to delete the examples imports two fictional
  * events. The preview would show them, but people skim.
  *
- * Matched on title and description only. Deliberately not on the date, which is
- * being changed from two-digit to four-digit years, nor on location or time,
+ * Matched on title and the example blurb. Deliberately not on the date, which
+ * is being changed from two-digit to four-digit years, nor on location or time,
  * which are the fields most likely to be tweaked in a future template.
+ *
+ * The blurb is looked for in either the description or the opponent cell.
+ * Inserting the Group column into the template once shifted the header row
+ * without shifting the example rows beneath it, which left the blurb in
+ * Opponent. That file has been corrected, but an admin may still have an older
+ * copy saved locally, and checking both cells costs nothing.
  */
-const TEMPLATE_EXAMPLES: { title: string; description: string }[] = [
-  { title: 'tournament a', description: 'this is an example tournament' },
-  { title: 'practice young', description: 'this is an example of a practice event' },
+const TEMPLATE_EXAMPLES: { title: string; blurb: string }[] = [
+  { title: 'tournament a', blurb: 'this is an example tournament' },
+  { title: 'practice young', blurb: 'this is an example of a practice event' },
+  { title: 'practice older', blurb: 'this is an example of a practice event' },
 ]
 
 /** Lower-cased, trimmed, internal whitespace collapsed. */
@@ -133,8 +158,11 @@ function normaliseText(value: string): string {
 function isTemplateExample(record: EventCsvRecord): boolean {
   const title = normaliseText(record.title)
   const description = normaliseText(record.description)
+  const opponent = normaliseText(record.opponent)
   return TEMPLATE_EXAMPLES.some(
-    (example) => example.title === title && example.description === description,
+    (example) =>
+      example.title === title
+      && (example.blurb === description || example.blurb === opponent),
   )
 }
 
@@ -142,6 +170,14 @@ export interface ParseResult {
   rows: ParsedEventRow[]
   /** Set when the whole file is unusable, e.g. wrong format or no header. */
   fatalError: string | null
+  /**
+   * Header cells that matched no known column, so their data was ignored.
+   *
+   * Surfaced rather than dropped silently: a renamed or misspelled header would
+   * otherwise mean a whole column of data quietly never arrives, and the import
+   * would look like it worked.
+   */
+  unknownColumns: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -173,6 +209,7 @@ export function buildEventsExportCsv(events: Event[]): string {
       time: event.time ?? '',
       type: event.type,
       location: event.location,
+      group: event.group ?? '',
       opponent: event.opponent ?? '',
       description: event.description ?? '',
     }
@@ -351,6 +388,7 @@ export function parseEventsCsv(text: string, existing: Event[]): ParseResult {
   if (looksLikeXlsx(text)) {
     return {
       rows: [],
+      unknownColumns: [],
       fatalError:
         'That looks like an Excel workbook (.xlsx) rather than a CSV. In Excel, '
         + 'use File \u2192 Save As and choose "CSV UTF-8 (Comma delimited)", then '
@@ -361,16 +399,29 @@ export function parseEventsCsv(text: string, existing: Event[]): ParseResult {
   const grid = splitCsv(text).filter((row) => row.some((cell) => cell.trim() !== ''))
 
   if (grid.length === 0) {
-    return { rows: [], fatalError: 'That file is empty.' }
+    return { rows: [], fatalError: 'That file is empty.', unknownColumns: [] }
   }
 
   const headerRow = grid[0]!.map(normaliseHeader)
   const indexOf = new Map<string, number>()
+  const matchedIndexes = new Set<number>()
   for (const column of EVENT_COLUMNS) {
     const candidates = [column.header.toLowerCase(), ...column.aliases]
-    const index = headerRow.findIndex((cell) => candidates.includes(cell))
-    if (index >= 0) indexOf.set(column.key, index)
+    const index = headerRow.findIndex(
+      (cell, i) => !matchedIndexes.has(i) && candidates.includes(cell),
+    )
+    if (index >= 0) {
+      indexOf.set(column.key, index)
+      matchedIndexes.add(index)
+    }
   }
+
+  // Reported from the original header row, not the normalised one, so the admin
+  // sees the text exactly as it appears in their spreadsheet.
+  const unknownColumns = grid[0]!
+    .map((cell, i) => ({ cell: cell.trim(), i }))
+    .filter(({ cell, i }) => cell !== '' && !matchedIndexes.has(i))
+    .map(({ cell }) => cell)
 
   const missingRequired = EVENT_COLUMNS
     .filter((c) => c.required && !indexOf.has(c.key))
@@ -379,6 +430,7 @@ export function parseEventsCsv(text: string, existing: Event[]): ParseResult {
   if (missingRequired.length > 0) {
     return {
       rows: [],
+      unknownColumns,
       fatalError:
         `The header row is missing: ${missingRequired.join(', ')}. `
         + 'Download the template and paste your rows under its headers.',
@@ -408,6 +460,7 @@ export function parseEventsCsv(text: string, existing: Event[]): ParseResult {
       time: cell('time'),
       type: cell('type'),
       location: cell('location'),
+      group: cell('group'),
       opponent: cell('opponent'),
       description: cell('description'),
     }
@@ -431,6 +484,8 @@ export function parseEventsCsv(text: string, existing: Event[]): ParseResult {
       errors.push(`Type "${raw.type}" must be one of ${EVENT_TYPES.join(', ')}`)
     }
 
+    const groupValue = isAllGroups(raw.group) ? ALL_GROUPS : cleanGroup(raw.group)
+
     const duplicateOf = date
       ? (existingKeys.get(duplicateKey(raw.title, date)) ?? null)
       : null
@@ -449,6 +504,9 @@ export function parseEventsCsv(text: string, existing: Event[]): ParseResult {
             type,
             location: raw.location,
             ...(raw.time ? { time: raw.time } : {}),
+            // Canonicalised so "both" or "any" in a hand-filled sheet does not
+            // become a squad name of its own in the filters.
+            ...(groupValue ? { group: groupValue } : {}),
             ...(raw.opponent ? { opponent: raw.opponent } : {}),
             ...(raw.description ? { description: raw.description } : {}),
           }
@@ -457,10 +515,14 @@ export function parseEventsCsv(text: string, existing: Event[]): ParseResult {
   }
 
   if (rows.length === 0) {
-    return { rows: [], fatalError: 'That file has headers but no event rows.' }
+    return {
+      rows: [],
+      unknownColumns,
+      fatalError: 'That file has headers but no event rows.',
+    }
   }
 
-  return { rows, fatalError: null }
+  return { rows, fatalError: null, unknownColumns }
 }
 
 function duplicateKey(title: string, date: Date): string {

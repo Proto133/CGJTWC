@@ -2,13 +2,22 @@
 import type { Event } from 'src/types'
 import { date } from 'quasar'
 import { computed } from 'vue'
+import { eventSquads } from 'src/utils/eventGroups'
 
-const props = defineProps<{ event: Event }>()
+// knownSquads lets ALL expand to the squads the club actually runs. Passed in
+// rather than read from the store so the card stays presentational.
+const props = defineProps<{
+  event: Event
+  knownSquads?: string[] | undefined
+}>()
 
 const eventDate = computed(() => props.event.date.toDate())
 const month = computed(() => date.formatDate(eventDate.value, 'MMM'))
 const day = computed(() => date.formatDate(eventDate.value, 'D'))
 const weekday = computed(() => date.formatDate(eventDate.value, 'dddd'))
+
+// Two badges for ALL, one for a single squad, none when the field is blank.
+const squads = computed(() => eventSquads(props.event.group, props.knownSquads ?? []))
 
 const typeColors: Record<string, string> = {
   practice: 'type-practice',
@@ -32,6 +41,13 @@ const typeColors: Record<string, string> = {
           <h3 class="event-card__title">{{ event.title }}</h3>
           <span :class="['event-type-badge', typeColors[event.type]]">
             {{ event.type }}
+          </span>
+          <span
+            v-for="squad in squads"
+            :key="squad"
+            class="event-type-badge squad-badge"
+          >
+            {{ squad }}
           </span>
         </div>
 
@@ -92,6 +108,14 @@ const typeColors: Record<string, string> = {
   flex: 1 1 auto;
   min-width: 0;
   overflow-wrap: break-word;
+}
+
+.squad-badge {
+  /* Outlined rather than filled, so squad badges read as secondary to the event
+     type badge they sit beside instead of competing with it. */
+  background: transparent;
+  border: 1px solid var(--grey-400, #b0b6c0);
+  color: var(--grey-600);
 }
 
 .event-card__meta {

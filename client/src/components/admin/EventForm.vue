@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { date } from 'quasar'
+import { useEventsStore } from 'stores/events'
+import { ALL_GROUPS, cleanGroup, isAllGroups } from 'src/utils/eventGroups'
 import type { Event, EventType, EventFormPayload } from 'src/types'
 
 // `| undefined` is required because the project enables
@@ -23,6 +25,7 @@ interface EventFormState {
   time: string
   location: string
   type: EventType
+  group: string
   opponent: string
   description: string
 }
@@ -33,6 +36,7 @@ const form = ref<EventFormState>({
   time: '',
   location: '',
   type: 'dual',
+  group: '',
   opponent: '',
   description: '',
 })
@@ -44,6 +48,34 @@ const eventTypes: { label: string; value: EventType }[] = [
   { label: 'Other', value: 'other' },
 ]
 
+const store = useEventsStore()
+
+/**
+ * ALL first, then the squads already in use elsewhere in the schedule.
+ *
+ * Suggestions rather than a fixed list: the field is free text, so a new squad
+ * can be typed once and is then offered on every later event, which is what
+ * keeps spellings consistent without hardcoding the club's naming.
+ */
+const groupSuggestions = computed(() => [ALL_GROUPS, ...store.squads])
+const groupOptions = ref<string[]>([])
+
+function filterGroups(input: string, update: (fn: () => void) => void) {
+  update(() => {
+    const needle = input.toLowerCase()
+    groupOptions.value = groupSuggestions.value.filter((option) =>
+      option.toLowerCase().includes(needle))
+  })
+}
+
+// q-select's clearable writes null, which the string-typed state cannot hold.
+const groupModel = computed({
+  get: () => form.value.group,
+  set: (value: string | null) => {
+    form.value.group = value ?? ''
+  },
+})
+
 watch(() => props.modelValue, (val) => {
   if (val) {
     form.value = {
@@ -52,6 +84,7 @@ watch(() => props.modelValue, (val) => {
       time: val.time || '',
       location: val.location || '',
       type: val.type || 'dual',
+      group: val.group || '',
       opponent: val.opponent || '',
       description: val.description || '',
     }
@@ -62,6 +95,10 @@ function handleSave() {
   const payload = {
     ...form.value,
     date: new Date(form.value.date),
+    // Canonicalised so "both" or "all squads" typed by hand does not become a
+    // squad name of its own. Blank is kept rather than omitted: on an edit, an
+    // absent key would leave the old value in place instead of clearing it.
+    group: isAllGroups(form.value.group) ? ALL_GROUPS : cleanGroup(form.value.group),
   }
   emit('save', payload)
 }
@@ -69,7 +106,7 @@ function handleSave() {
 function reset() {
   form.value = {
     title: '', date: date.formatDate(new Date(), 'YYYY/MM/DD'), time: '', location: '',
-    type: 'dual', opponent: '', description: '',
+    type: 'dual', group: '', opponent: '', description: '',
   }
 }
 
@@ -106,6 +143,21 @@ defineExpose({ reset })
       emit-value
       map-options
       outlined
+    />
+
+    <q-select
+      v-model="groupModel"
+      :options="groupOptions"
+      label="Squad / Group"
+      hint="TBI, NS, or ALL for both. Leave blank to show no squad on the event."
+      outlined
+      clearable
+      use-input
+      fill-input
+      hide-selected
+      new-value-mode="add-unique"
+      input-debounce="0"
+      @filter="filterGroups"
     />
 
     <q-input v-model="form.opponent" label="Opponent (if applicable)" outlined />
