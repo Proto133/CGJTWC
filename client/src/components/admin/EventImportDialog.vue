@@ -32,11 +32,20 @@ const templateXlsxUrl = computed(() => assetUrl('templates/Events_Template.xlsx'
 
 const validRows = computed(() => rows.value.filter((r) => r.payload !== null))
 const errorRows = computed(() => rows.value.filter((r) => r.errors.length > 0))
-const duplicateRows = computed(() => validRows.value.filter((r) => r.duplicateOf !== null))
+const exampleRows = computed(() => rows.value.filter((r) => r.isExample))
+const duplicateRows = computed(() =>
+  validRows.value.filter((r) => r.duplicateOf !== null && !r.isExample))
 
-/** What will actually be written if Import is pressed now. */
+/**
+ * What will actually be written if Import is pressed now.
+ *
+ * Template examples are always excluded, with no override: nobody wants an
+ * event called "Tournament A" in Colorado Springs on their schedule.
+ */
 const rowsToImport = computed(() =>
-  validRows.value.filter((r) => !(skipDuplicates.value && r.duplicateOf)))
+  validRows.value.filter(
+    (r) => !r.isExample && !(skipDuplicates.value && r.duplicateOf),
+  ))
 
 function reset() {
   file.value = null
@@ -157,9 +166,9 @@ function exportCurrent() {
             />
           </div>
           <div class="step-note">
-            <strong>Delete the example rows</strong> before uploading, or they
-            will be imported as real events. If you use the Excel version, save
-            it as CSV before uploading.
+            The template's example rows are recognised and skipped, so you can
+            leave them in place. If you use the Excel version, save it as CSV
+            before uploading.
           </div>
 
           <q-expansion-item dense label="What each column expects" class="q-mt-sm">
@@ -220,6 +229,9 @@ function exportCurrent() {
             <q-chip v-if="duplicateRows.length" dense square color="warning" text-color="dark">
               {{ duplicateRows.length }} already exist
             </q-chip>
+            <q-chip v-if="exampleRows.length" dense square color="grey-5" text-color="white">
+              {{ exampleRows.length }} template example{{ exampleRows.length === 1 ? '' : 's' }}
+            </q-chip>
           </div>
 
           <q-checkbox
@@ -237,7 +249,9 @@ function exportCurrent() {
               class="preview__row"
               :class="{
                 'preview__row--bad': row.errors.length > 0,
-                'preview__row--dupe': row.errors.length === 0 && row.duplicateOf,
+                'preview__row--dupe':
+                  row.errors.length === 0 && row.duplicateOf && !row.isExample,
+                'preview__row--example': row.isExample,
               }"
             >
               <div class="preview__num">{{ row.rowNumber }}</div>
@@ -253,6 +267,9 @@ function exportCurrent() {
                 </div>
                 <div v-if="row.errors.length" class="preview__errors">
                   {{ row.errors.join(' · ') }}
+                </div>
+                <div v-else-if="row.isExample" class="preview__dupe">
+                  Example row from the template — skipped
                 </div>
                 <div v-else-if="row.duplicateOf" class="preview__dupe">
                   An event called "{{ row.duplicateOf }}" already exists on this date
@@ -378,6 +395,13 @@ function exportCurrent() {
 
 .preview__row--dupe {
   background: rgba(242, 192, 55, 0.12);
+}
+
+/* Muted rather than coloured: an example row is neither a problem nor a
+   decision, it is just not going to be imported. */
+.preview__row--example {
+  background: var(--grey-050, #fafafa);
+  opacity: 0.72;
 }
 
 .preview__num {

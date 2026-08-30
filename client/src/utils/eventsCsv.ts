@@ -105,6 +105,37 @@ export interface ParsedEventRow {
   errors: string[]
   /** Title of an existing event on the same date, if any. */
   duplicateOf: string | null
+  /** A demonstration row shipped in the template, never imported. */
+  isExample: boolean
+}
+
+/**
+ * The worked examples in the club's template.
+ *
+ * They parse as perfectly valid events, so without this an admin who fills in
+ * their own rows but forgets to delete the examples imports two fictional
+ * events. The preview would show them, but people skim.
+ *
+ * Matched on title and description only. Deliberately not on the date, which is
+ * being changed from two-digit to four-digit years, nor on location or time,
+ * which are the fields most likely to be tweaked in a future template.
+ */
+const TEMPLATE_EXAMPLES: { title: string; description: string }[] = [
+  { title: 'tournament a', description: 'this is an example tournament' },
+  { title: 'practice young', description: 'this is an example of a practice event' },
+]
+
+/** Lower-cased, trimmed, internal whitespace collapsed. */
+function normaliseText(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+function isTemplateExample(record: EventCsvRecord): boolean {
+  const title = normaliseText(record.title)
+  const description = normaliseText(record.description)
+  return TEMPLATE_EXAMPLES.some(
+    (example) => example.title === title && example.description === description,
+  )
 }
 
 export interface ParseResult {
@@ -410,6 +441,7 @@ export function parseEventsCsv(text: string, existing: Event[]): ParseResult {
       raw,
       errors,
       duplicateOf,
+      isExample: isTemplateExample(raw),
       payload: errors.length === 0 && date
         ? {
             title: raw.title,
