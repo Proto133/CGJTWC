@@ -4,9 +4,13 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ============ PUBLIC READS (anyone can view the site content) ============
+    // Validation added when bulk spreadsheet import arrived: a writer that
+    // creates dozens of documents from a parsed file makes malformed data far
+    // likelier than a hand-filled form ever did.
     match /events/{eventId} {
       allow read: if true;
-      allow create, update, delete: if isAdmin();
+      allow create, update: if isAdmin() && isValidEvent();
+      allow delete: if isAdmin();
     }
 
     match /announcements/{announcementId} {
@@ -148,6 +152,26 @@ service cloud.firestore {
       return isAdmin() &&
              get(/databases/$(database)/documents/admins/$(request.auth.uid))
                .data.get('role', 'admin') == 'owner';
+    }
+
+    // Shared by create and update, so it describes a complete event document
+    // rather than a patch. The client always writes the whole thing.
+    function isValidEvent() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['title', 'date', 'time', 'location', 'type',
+                              'opponent', 'description', 'createdAt', 'updatedAt'])
+             && d.keys().hasAll(['title', 'date', 'location', 'type'])
+             && d.title is string && d.title.size() > 0 && d.title.size() <= 140
+             && d.date is timestamp
+             && d.location is string && d.location.size() > 0 && d.location.size() <= 200
+             && d.type in ['practice', 'dual', 'tournament', 'other']
+             // Time is free text on purpose: "All Day" and "4:15-5:15" are both
+             // real answers from the club's own schedule.
+             && (!('time' in d.keys()) || (d.time is string && d.time.size() <= 60))
+             && (!('opponent' in d.keys())
+                 || (d.opponent is string && d.opponent.size() <= 140))
+             && (!('description' in d.keys())
+                 || (d.description is string && d.description.size() <= 2000));
     }
 
     // Unauthenticated public write, so every field is whitelisted, length

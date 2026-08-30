@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useEventsStore } from 'stores/events'
 import { useAnnouncementsStore } from 'stores/announcements'
 import { useStaffStore } from 'stores/staff'
@@ -20,6 +20,8 @@ import FeedbackBoard from 'components/admin/FeedbackBoard.vue'
 import AccountsVault from 'components/admin/AccountsVault.vue'
 import MentionsQueue from 'components/admin/MentionsQueue.vue'
 import MessagesInbox from 'components/admin/MessagesInbox.vue'
+import EventImportDialog from 'components/admin/EventImportDialog.vue'
+import EventBulkEditDialog from 'components/admin/EventBulkEditDialog.vue'
 import type {
   Event,
   Announcement,
@@ -62,6 +64,41 @@ const showAnnouncementForm = ref(false)
 const editingAnnouncement = ref<Partial<Announcement> | null>(null)
 const showStaffForm = ref(false)
 const editingStaff = ref<Partial<StaffMember> | null>(null)
+
+// ----- Bulk event handling -----
+const importOpen = ref(false)
+const bulkEditOpen = ref(false)
+/** Ids of ticked events. Cleared after any bulk action completes. */
+const selectedEventIds = ref<string[]>([])
+
+const allEventsSelected = computed(() =>
+  eventsStore.events.length > 0
+  && selectedEventIds.value.length === eventsStore.events.length)
+
+function toggleEvent(id: string, checked: boolean) {
+  selectedEventIds.value = checked
+    ? [...selectedEventIds.value, id]
+    : selectedEventIds.value.filter((existing) => existing !== id)
+}
+
+function toggleAllEvents(checked: boolean) {
+  selectedEventIds.value = checked ? eventsStore.events.map((e) => e.id) : []
+}
+
+function confirmBulkDeleteEvents() {
+  const count = selectedEventIds.value.length
+  Dialog.create({
+    title: `Delete ${count} event${count === 1 ? '' : 's'}?`,
+    message: 'They are removed from the public schedule immediately. This cannot be undone.',
+    cancel: true,
+    persistent: true,
+    ok: { label: `Delete ${count}`, color: 'negative', unelevated: true, noCaps: true },
+  }).onOk(() => {
+    void eventsStore.deleteMany([...selectedEventIds.value]).then((ok) => {
+      if (ok) selectedEventIds.value = []
+    })
+  })
+}
 
 onMounted(() => {
   eventsStore.subscribe()
@@ -287,10 +324,50 @@ function confirmDeleteStaff(member: StaffMember) {
     <q-tab-panels v-model="tab" animated keep-alive>
       <!-- EVENTS -->
       <q-tab-panel name="events" class="q-px-none">
-        <div class="row items-center q-mb-md">
+        <div class="row items-center q-mb-md q-gutter-sm">
           <div class="text-h6">Manage Events</div>
           <q-space />
+          <q-btn
+            outline
+            no-caps
+            icon="upload_file"
+            label="Import spreadsheet"
+            @click="importOpen = true"
+          />
           <q-btn color="primary" unelevated no-caps icon="add" label="New Event" @click="openNewEvent" />
+        </div>
+
+        <!-- Only appears once something is ticked, so it never takes up space
+             during ordinary single-event editing. -->
+        <div v-if="selectedEventIds.length > 0" class="bulk-bar">
+          <span class="bulk-bar__count">
+            {{ selectedEventIds.length }} selected
+          </span>
+          <q-space />
+          <q-btn
+            dense
+            flat
+            no-caps
+            icon="edit"
+            label="Edit selected"
+            @click="bulkEditOpen = true"
+          />
+          <q-btn
+            dense
+            flat
+            no-caps
+            color="negative"
+            icon="delete"
+            label="Delete selected"
+            @click="confirmBulkDeleteEvents"
+          />
+          <q-btn
+            dense
+            flat
+            no-caps
+            label="Clear"
+            @click="selectedEventIds = []"
+          />
         </div>
 
         <q-card v-if="showEventForm" flat bordered class="q-mb-lg">
@@ -315,7 +392,28 @@ function confirmDeleteStaff(member: StaffMember) {
         </div>
 
         <q-list v-else bordered separator class="rounded-borders">
+          <q-item dense class="select-all-row">
+            <q-item-section side>
+              <q-checkbox
+                :model-value="allEventsSelected"
+                dense
+                @update:model-value="toggleAllEvents"
+              />
+            </q-item-section>
+            <q-item-section class="text-caption text-grey-6">
+              Select all {{ eventsStore.events.length }}
+            </q-item-section>
+          </q-item>
+
           <q-item v-for="event in eventsStore.events" :key="event.id">
+            <q-item-section side>
+              <q-checkbox
+                :model-value="selectedEventIds.includes(event.id)"
+                dense
+                :aria-label="`Select ${event.title}`"
+                @update:model-value="(v: boolean) => toggleEvent(event.id, v)"
+              />
+            </q-item-section>
             <q-item-section>
               <q-item-label class="text-weight-medium">{{ event.title }}</q-item-label>
               <q-item-label caption>
@@ -517,10 +615,39 @@ function confirmDeleteStaff(member: StaffMember) {
         <SettingsForm />
       </q-tab-panel>
     </q-tab-panels>
+
+    <EventImportDialog v-model="importOpen" />
+    <EventBulkEditDialog
+      v-model="bulkEditOpen"
+      :ids="selectedEventIds"
+      @done="selectedEventIds = []"
+    />
   </div>
 </template>
 
 <style scoped>
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  background: var(--grey-100, #f3f4f6);
+  border: 1px solid var(--grey-200, #e5e7eb);
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-bottom: 10px;
+}
+
+.bulk-bar__count {
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--navy-800);
+}
+
+.select-all-row {
+  background: var(--grey-050, #fafafa);
+}
+
 .dash-title {
   font-family: var(--font-display);
   font-weight: 700;

@@ -11,6 +11,7 @@ import {
   query,
   orderBy,
   Timestamp,
+  writeBatch,
 } from 'firebase/firestore'
 import { db } from 'src/firebase'
 import { Notify } from 'quasar'
@@ -113,6 +114,128 @@ export const useEventsStore = defineStore('events', () => {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // Bulk operations
+  // -------------------------------------------------------------------------
+
+  /** Firestore caps a batch at 500 writes. */
+  const BATCH_LIMIT = 500
+
+  function chunk<T>(items: T[], size: number): T[][] {
+    const out: T[][] = []
+    for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size))
+    return out
+  }
+
+  /** True while a bulk operation is in flight, for disabling the UI. */
+  const bulkWorking = ref(false)
+
+  /**
+   * Creates many events at once, used by the spreadsheet import.
+   *
+   * Batched rather than looped: a hundred sequential addDoc calls is slow and,
+   * worse, a failure halfway leaves a partly imported schedule that an admin
+   * then has to unpick by hand.
+   */
+  async function createMany(payloads: EventFormPayload[]) {
+    if (payloads.length === 0) return true
+    bulkWorking.value = true
+
+    try {
+      for (const group of chunk(payloads, BATCH_LIMIT)) {
+        const batch = writeBatch(db)
+        for (const payload of group) {
+          // doc() with no id generates one client-side, which is what lets a
+          // create take part in a batch at all.
+          batch.set(doc(collection(db, 'events')), {
+            ...payload,
+            date: Timestamp.fromDate(payload.date),
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          })
+        }
+        await batch.commit()
+      }
+
+      Notify.create({
+        type: 'positive',
+        message: `Imported ${payloads.length} event${payloads.length === 1 ? '' : 's'}`,
+      })
+      return true
+    } catch (error: unknown) {
+      Notify.create({
+        type: 'negative',
+        message: errorMessage(error, 'Failed to import events'),
+      })
+      return false
+    } finally {
+      bulkWorking.value = false
+    }
+  }
+
+  /**
+   * Applies the same field changes to many events.
+   *
+   * `changes` carries only the fields the admin explicitly chose to change, so
+   * an untouched field is never overwritten with a blank.
+   */
+  async function updateMany(ids: string[], changes: Partial<EventFormPayload>) {
+    if (ids.length === 0 || Object.keys(changes).length === 0) return true
+    bulkWorking.value = true
+
+    try {
+      const data: Record<string, unknown> = { ...changes, updatedAt: serverTimestamp() }
+      if (changes.date instanceof Date) data.date = Timestamp.fromDate(changes.date)
+
+      for (const group of chunk(ids, BATCH_LIMIT)) {
+        const batch = writeBatch(db)
+        for (const id of group) batch.update(doc(db, 'events', id), data)
+        await batch.commit()
+      }
+
+      Notify.create({
+        type: 'positive',
+        message: `Updated ${ids.length} event${ids.length === 1 ? '' : 's'}`,
+      })
+      return true
+    } catch (error: unknown) {
+      Notify.create({
+        type: 'negative',
+        message: errorMessage(error, 'Failed to update events'),
+      })
+      return false
+    } finally {
+      bulkWorking.value = false
+    }
+  }
+
+  async function deleteMany(ids: string[]) {
+    if (ids.length === 0) return true
+    bulkWorking.value = true
+
+    try {
+      for (const group of chunk(ids, BATCH_LIMIT)) {
+        const batch = writeBatch(db)
+        for (const id of group) batch.delete(doc(db, 'events', id))
+        await batch.commit()
+      }
+
+      Notify.create({
+        type: 'positive',
+        message: `Deleted ${ids.length} event${ids.length === 1 ? '' : 's'}`,
+      })
+      return true
+    } catch (error: unknown) {
+      Notify.create({
+        type: 'negative',
+        message: errorMessage(error, 'Failed to delete events'),
+      })
+      return false
+    } finally {
+      bulkWorking.value = false
+    }
+  }
+
   // Computed helpers
   const upcomingEvents = () => {
     const now = new Date()
@@ -130,11 +253,15 @@ export const useEventsStore = defineStore('events', () => {
   return {
     events,
     loading,
+    bulkWorking,
     subscribe,
     unsubscribeFromEvents,
     createEvent,
     updateEvent,
     deleteEvent,
+    createMany,
+    updateMany,
+    deleteMany,
     upcomingEvents,
     pastEvents,
   }
