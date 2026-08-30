@@ -1,4 +1,4 @@
-Event Title,Date,Time,Location/Venue,Event Type,Group (TBI/NS),Opponent (if applicable),Description/Notes
-Tournament A,09/09/2026,All Day,Colorado Springs,Tournament,ALL,,This is an example tournament
-Practice Young,09/21/2026,4:15-5:15,Cary Grove High School,Practice,TBI,,This is an Example of a practice event
-Practice Older,09/21/2026,5:30-6:45,Cary Grove High School,Practice,NS,,This is an Example of a practice event
+Event Title,Date,Start Time,End Time,Location/Venue,Event Type,Group (TBI/NS),Opponent (if applicable),Description/Notes
+Tournament A,09/09/2026,All Day,,Colorado Springs,Tournament,ALL,,This is an example tournament
+Practice Young,09/21/2026,4:15 PM,5:15 PM,Cary Grove High School,Practice,TBI,,This is an Example of a practice event
+Practice Older,09/21/2026,5:30 PM,6:45 PM,Cary Grove High School,Practice,NS,,This is an Example of a practice event

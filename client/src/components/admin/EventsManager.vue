@@ -6,6 +6,7 @@ import EventForm from 'components/admin/EventForm.vue'
 import EventImportDialog from 'components/admin/EventImportDialog.vue'
 import EventBulkEditDialog from 'components/admin/EventBulkEditDialog.vue'
 import { eventSquads, matchesGroupFilter } from 'src/utils/eventGroups'
+import { formatEventTime } from 'src/utils/eventTimes'
 import { groupByMonth } from 'src/utils/eventPeriods'
 import type { Event, EventFormPayload, EventType } from 'src/types'
 
@@ -356,7 +357,7 @@ function formatDay(event: Event) {
               </q-item-label>
               <q-item-label caption>
                 {{ formatDay(event) }}
-                <template v-if="event.time"> · {{ event.time }}</template>
+                <template v-if="formatEventTime(event)"> · {{ formatEventTime(event) }}</template>
                 · {{ event.location }}
                 <template v-if="event.opponent"> · vs {{ event.opponent }}</template>
               </q-item-label>

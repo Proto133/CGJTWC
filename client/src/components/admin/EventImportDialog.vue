@@ -281,7 +281,8 @@ function exportCurrent() {
                   {{ row.raw.title || '(no title)' }}
                   <span class="preview__meta">
                     {{ row.raw.date }}
-                    <template v-if="row.raw.time"> · {{ row.raw.time }}</template>
+                    <template v-if="row.raw.startTime"> · {{ row.raw.startTime }}</template>
+                    <template v-if="row.raw.endTime">–{{ row.raw.endTime }}</template>
                     <template v-if="row.raw.type"> · {{ row.raw.type }}</template>
                     <template v-if="row.raw.group"> · {{ row.raw.group }}</template>
                     <template v-if="row.raw.location"> · {{ row.raw.location }}</template>

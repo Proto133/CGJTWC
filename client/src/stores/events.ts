@@ -17,6 +17,7 @@ import { db } from 'src/firebase'
 import { Notify } from 'quasar'
 import { errorMessage } from 'src/utils/errors'
 import { squadsInUse } from 'src/utils/eventGroups'
+import { startMinutes } from 'src/utils/eventTimes'
 import type { Event, EventFormPayload } from 'src/types'
 
 export const useEventsStore = defineStore('events', () => {
@@ -33,10 +34,29 @@ export const useEventsStore = defineStore('events', () => {
     unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        events.value = snapshot.docs.map((docSnap) => ({
+        const docs = snapshot.docs.map((docSnap) => ({
           id: docSnap.id,
           ...(docSnap.data() as Omit<Event, 'id'>),
         }))
+
+        /*
+         * Firestore orders by date but gives no tie-break, and with two squads
+         * practising twice a week most days hold more than one event, so their
+         * relative order was previously undefined and could shuffle between
+         * snapshots. Sorted here rather than in the query because a second
+         * orderBy would need a composite index, and seventy documents sort
+         * instantly.
+         */
+        docs.sort((a, b) => {
+          const byDate = a.date.toMillis() - b.date.toMillis()
+          if (byDate !== 0) return byDate
+          const byTime = startMinutes(a) - startMinutes(b)
+          if (byTime !== 0) return byTime
+          // Final tie-break so the order is stable rather than merely grouped.
+          return a.title.localeCompare(b.title)
+        })
+
+        events.value = docs
         loading.value = false
       },
       (error) => {

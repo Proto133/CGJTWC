@@ -1,5 +1,6 @@
 import type { Event, EventFormPayload, EventType } from 'src/types'
 import { ALL_GROUPS, cleanGroup, isAllGroups } from 'src/utils/eventGroups'
+import { formatTime, parseTimeCell } from 'src/utils/eventTimes'
 
 /**
  * Bulk event import from a spreadsheet.
@@ -51,11 +52,21 @@ export const EVENT_COLUMNS: ColumnSpec[] = [
     hint: '09/09/26 or 09-09-2026',
   },
   {
-    key: 'time',
-    header: 'Time',
-    aliases: ['start time'],
+    key: 'startTime',
+    header: 'Start Time',
+    // 'time' is kept so a sheet built from the older single-column template
+    // still imports; a range such as "4:15-5:15 PM" in that one cell is split
+    // into both fields.
+    aliases: ['time', 'start', 'from', 'begins'],
     required: false,
-    hint: 'Free text: 6:00 PM, 4:15-5:15, All Day',
+    hint: '4:15 PM, or 16:15. Write All Day for an all-day event',
+  },
+  {
+    key: 'endTime',
+    header: 'End Time',
+    aliases: ['end', 'to', 'finish', 'ends'],
+    required: false,
+    hint: '5:15 PM. Leave blank if there is no set finish',
   },
   {
     key: 'location',
@@ -106,7 +117,8 @@ export const EVENT_COLUMNS: ColumnSpec[] = [
 interface EventCsvRecord {
   title: string
   date: string
-  time: string
+  startTime: string
+  endTime: string
   type: string
   location: string
   group: string
@@ -206,7 +218,12 @@ export function buildEventsExportCsv(events: Event[]): string {
     const record: EventCsvRecord = {
       title: event.title,
       date: formatUsDate(event.date.toDate()),
-      time: event.time ?? '',
+      // Written back in the readable form the template asks for, so an export
+      // can be edited and re-imported unchanged.
+      startTime: event.allDay
+        ? 'All Day'
+        : (formatTime(event.startTime) || event.time || ''),
+      endTime: event.allDay ? '' : formatTime(event.endTime),
       type: event.type,
       location: event.location,
       group: event.group ?? '',
@@ -457,7 +474,8 @@ export function parseEventsCsv(text: string, existing: Event[]): ParseResult {
     const raw: EventCsvRecord = {
       title: cell('title'),
       date: cell('date'),
-      time: cell('time'),
+      startTime: cell('startTime'),
+      endTime: cell('endTime'),
       type: cell('type'),
       location: cell('location'),
       group: cell('group'),
@@ -485,6 +503,8 @@ export function parseEventsCsv(text: string, existing: Event[]): ParseResult {
     }
 
     const groupValue = isAllGroups(raw.group) ? ALL_GROUPS : cleanGroup(raw.group)
+    const times = resolveTimes(raw.startTime, raw.endTime)
+    errors.push(...times.errors)
 
     const duplicateOf = date
       ? (existingKeys.get(duplicateKey(raw.title, date)) ?? null)
@@ -503,7 +523,9 @@ export function parseEventsCsv(text: string, existing: Event[]): ParseResult {
             date,
             type,
             location: raw.location,
-            ...(raw.time ? { time: raw.time } : {}),
+            ...(times.allDay ? { allDay: true } : {}),
+            ...(times.startTime ? { startTime: times.startTime } : {}),
+            ...(times.endTime ? { endTime: times.endTime } : {}),
             // Canonicalised so "both" or "any" in a hand-filled sheet does not
             // become a squad name of its own in the filters.
             ...(groupValue ? { group: groupValue } : {}),
@@ -527,6 +549,70 @@ export function parseEventsCsv(text: string, existing: Event[]): ParseResult {
 
 function duplicateKey(title: string, date: Date): string {
   return `${title.trim().toLowerCase()}|${formatUsDate(date)}`
+}
+
+interface ResolvedTimes {
+  startTime: string
+  endTime: string
+  allDay: boolean
+  errors: string[]
+}
+
+/**
+ * Turns the two spreadsheet time cells into stored fields.
+ *
+ * An ambiguous value is refused rather than guessed. "4:15" is a perfectly
+ * reasonable thing to type and could mean either half of the day, and a
+ * practice silently scheduled for 4:15 in the morning is worse than a row the
+ * admin has to correct — the preview lists every offending row at once, so one
+ * find-and-replace fixes a whole season.
+ */
+function resolveTimes(startCell: string, endCell: string): ResolvedTimes {
+  const errors: string[] = []
+  const start = parseTimeCell(startCell)
+  const end = parseTimeCell(endCell)
+
+  const complain = (label: string, parsed: typeof start) => {
+    if (parsed.kind === 'ambiguous') {
+      errors.push(
+        `${label} "${parsed.raw}" needs AM or PM, or write it in 24-hour form `
+        + '(16:15)',
+      )
+    } else if (parsed.kind === 'invalid') {
+      errors.push(
+        `${label} "${parsed.raw}" is not a time. Use 4:15 PM, 16:15, or All Day.`,
+      )
+    }
+  }
+
+  complain('Start time', start)
+  complain('End time', end)
+
+  // "All Day" in either cell settles it, and any times are then irrelevant.
+  if (start.kind === 'all-day' || end.kind === 'all-day') {
+    return { startTime: '', endTime: '', allDay: true, errors }
+  }
+
+  const startTime = start.kind === 'time' ? start.start : ''
+  // The End Time column wins over an end implied by a range in the start cell,
+  // on the grounds that the explicit column is the more deliberate statement.
+  const endTime = end.kind === 'time'
+    ? end.start
+    : (start.kind === 'time' ? (start.end ?? '') : '')
+
+  if (startTime && endTime && endTime <= startTime) {
+    // String comparison is safe: zero-padded 24-hour values sort as times.
+    errors.push(
+      `End time ${formatTime(endTime)} is not after the start time `
+      + `${formatTime(startTime)}`,
+    )
+  }
+
+  if (!startTime && endTime) {
+    errors.push('There is an end time but no start time')
+  }
+
+  return { startTime, endTime, allDay: false, errors }
 }
 
 /** Triggers a download without needing a server or an anchor in the template. */

@@ -25,7 +25,7 @@ const store = useEventsStore()
  * description on every selected event. Only enabled fields are sent.
  */
 const enabled = ref({
-  time: false,
+  times: false,
   location: false,
   type: false,
   group: false,
@@ -34,14 +34,18 @@ const enabled = ref({
 })
 
 const values = ref<{
-  time: string
+  startTime: string
+  endTime: string
+  allDay: boolean
   location: string
   type: EventType
   group: string
   opponent: string
   description: string
 }>({
-  time: '',
+  startTime: '',
+  endTime: '',
+  allDay: false,
   location: '',
   type: 'practice',
   group: '',
@@ -51,7 +55,7 @@ const values = ref<{
 
 function reset() {
   enabled.value = {
-    time: false,
+    times: false,
     location: false,
     type: false,
     group: false,
@@ -59,7 +63,9 @@ function reset() {
     description: false,
   }
   values.value = {
-    time: '',
+    startTime: '',
+    endTime: '',
+    allDay: false,
     location: '',
     type: 'practice',
     group: '',
@@ -84,7 +90,19 @@ watch(() => props.modelValue, (open) => {
 
 const changes = computed<Partial<EventFormPayload>>(() => {
   const out: Partial<EventFormPayload> = {}
-  if (enabled.value.time) out.time = values.value.time.trim()
+  if (enabled.value.times) {
+    if (values.value.allDay) {
+      // All day and a clock time are mutually exclusive, so setting one clears
+      // the other rather than leaving a contradictory pair on the document.
+      out.allDay = true
+      out.startTime = ''
+      out.endTime = ''
+    } else {
+      out.allDay = false
+      out.startTime = values.value.startTime
+      out.endTime = values.value.endTime
+    }
+  }
   if (enabled.value.location) out.location = values.value.location.trim()
   if (enabled.value.type) out.type = values.value.type
   if (enabled.value.group) {
@@ -106,8 +124,30 @@ const changedFields = computed(() => Object.keys(changes.value))
 const locationBlank = computed(() =>
   enabled.value.location && values.value.location.trim() === '')
 
+/**
+ * An end with no start would leave the events showing a finish time and no
+ * beginning, so it is refused rather than silently dropped.
+ */
+const endWithoutStart = computed(() =>
+  enabled.value.times
+  && !values.value.allDay
+  && values.value.endTime !== ''
+  && values.value.startTime === '')
+
+const endBeforeStart = computed(() =>
+  enabled.value.times
+  && !values.value.allDay
+  && values.value.startTime !== ''
+  && values.value.endTime !== ''
+  // Zero-padded 24-hour values compare correctly as strings.
+  && values.value.endTime <= values.value.startTime)
+
 const canApply = computed(() =>
-  props.ids.length > 0 && changedFields.value.length > 0 && !locationBlank.value)
+  props.ids.length > 0
+  && changedFields.value.length > 0
+  && !locationBlank.value
+  && !endWithoutStart.value
+  && !endBeforeStart.value)
 
 async function apply() {
   const ok = await store.updateMany(props.ids, changes.value)
@@ -137,15 +177,62 @@ async function apply() {
 
       <q-card-section class="q-gutter-sm">
         <div class="field-row">
-          <q-checkbox v-model="enabled.time" dense label="Time" class="field-row__tick" />
-          <q-input
-            v-model="values.time"
-            outlined
-            dense
-            :disable="!enabled.time"
-            placeholder="6:00 PM, 4:15-5:15, All Day"
-            class="field-row__input"
-          />
+          <q-checkbox v-model="enabled.times" dense label="Time" class="field-row__tick" />
+          <div class="field-row__input">
+            <q-checkbox
+              v-model="values.allDay"
+              dense
+              label="All day"
+              :disable="!enabled.times"
+            />
+            <div class="time-pair">
+              <q-input
+                v-model="values.startTime"
+                outlined
+                dense
+                mask="time"
+                :rules="['time']"
+                hide-bottom-space
+                label="Start"
+                :disable="!enabled.times || values.allDay"
+              >
+                <template #append>
+                  <q-icon name="access_time" class="cursor-pointer">
+                    <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                      <q-time v-model="values.startTime" />
+                    </q-popup-proxy>
+                  </q-icon>
+                </template>
+              </q-input>
+              <q-input
+                v-model="values.endTime"
+                outlined
+                dense
+                mask="time"
+                :rules="['time']"
+                hide-bottom-space
+                label="End"
+                :disable="!enabled.times || values.allDay"
+              >
+                <template #append>
+                  <q-icon name="access_time" class="cursor-pointer">
+                    <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                      <q-time v-model="values.endTime" />
+                    </q-popup-proxy>
+                  </q-icon>
+                </template>
+              </q-input>
+            </div>
+            <div v-if="endWithoutStart" class="field-error">
+              Add a start time, or clear the end time.
+            </div>
+            <div v-else-if="endBeforeStart" class="field-error">
+              The end time must be after the start time.
+            </div>
+            <div v-else-if="enabled.times && !values.allDay" class="field-hint">
+              Leave both empty to clear the times.
+            </div>
+          </div>
         </div>
 
         <div class="field-row">
@@ -301,6 +388,28 @@ async function apply() {
 .field-row__input {
   flex: 1;
   min-width: 0;
+}
+
+.time-pair {
+  display: flex;
+  gap: 8px;
+}
+
+.time-pair > * {
+  flex: 1;
+  min-width: 0;
+}
+
+.field-error {
+  font-size: 0.78rem;
+  color: var(--negative, #c10015);
+  margin-top: 4px;
+}
+
+.field-hint {
+  font-size: 0.78rem;
+  color: var(--grey-500);
+  margin-top: 4px;
 }
 
 .bulk-note {

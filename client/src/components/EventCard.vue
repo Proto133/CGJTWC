@@ -3,6 +3,7 @@ import type { Event } from 'src/types'
 import { date } from 'quasar'
 import { computed } from 'vue'
 import { eventSquads } from 'src/utils/eventGroups'
+import { formatEventTime } from 'src/utils/eventTimes'
 
 // knownSquads lets ALL expand to the squads the club actually runs. Passed in
 // rather than read from the store so the card stays presentational.
@@ -18,6 +19,10 @@ const weekday = computed(() => date.formatDate(eventDate.value, 'dddd'))
 
 // Two badges for ALL, one for a single squad, none when the field is blank.
 const squads = computed(() => eventSquads(props.event.group, props.knownSquads ?? []))
+
+// Falls back to the deprecated free-text field for events written before times
+// were split into start and end.
+const timeText = computed(() => formatEventTime(props.event))
 
 const typeColors: Record<string, string> = {
   practice: 'type-practice',
@@ -54,7 +59,7 @@ const typeColors: Record<string, string> = {
         <div class="event-card__meta">
           <span class="event-card__meta-item">
             <q-icon name="schedule" size="16px" />
-            {{ weekday }}<template v-if="event.time"> · {{ event.time }}</template>
+            {{ weekday }}<template v-if="timeText"> · {{ timeText }}</template>
           </span>
           <span class="event-card__meta-item">
             <q-icon name="place" size="16px" />

@@ -4,7 +4,29 @@ export interface Event {
   id: string
   title: string
   date: Timestamp
+  /**
+   * @deprecated Free-text time, replaced by startTime/endTime/allDay.
+   *
+   * Still read as a display fallback so documents written before the split keep
+   * rendering, which is what let the change ship without a data migration.
+   * Editing an event converts it. Do not write this on new events.
+   */
   time?: string
+  /**
+   * Wall-clock 'HH:MM' in 24-hour form, e.g. '16:15'.
+   *
+   * Deliberately not a UTC instant or an offset-bearing value: the season
+   * crosses the November DST change, so anything carrying an offset would move
+   * a 4:15 PM practice by an hour halfway through the year. See
+   * src/utils/eventTimes.ts.
+   */
+  startTime?: string
+  endTime?: string
+  /**
+   * Explicitly all day, as distinct from no time recorded at all. Absent plus
+   * no startTime means nobody filled it in, and nothing is displayed.
+   */
+  allDay?: boolean
   location: string
   type: 'practice' | 'dual' | 'tournament' | 'other'
   opponent?: string
@@ -186,7 +208,10 @@ export type EventType = Event['type']
 export interface EventFormPayload {
   title: string
   date: Date
-  time?: string
+  /** Wall-clock 'HH:MM', 24-hour. */
+  startTime?: string
+  endTime?: string
+  allDay?: boolean
   location: string
   type: EventType
   opponent?: string
