@@ -407,11 +407,21 @@ function moveFaq(index: number, delta: number) {
           </div>
 
           <q-input
+            v-model="form.payment.paymentDeadline"
+            type="textarea"
+            label="Payment deadline notice"
+            outlined
+            autogrow
+            hint="Shown prominently above the payment options. Emptying this restores the default wording rather than hiding it — reword it instead."
+          />
+
+          <q-input
             v-model="form.payment.instructions"
             type="textarea"
             label="Payment instructions"
             outlined
             autogrow
+            hint="Shown under the method-specific detail"
           />
 
           <div>

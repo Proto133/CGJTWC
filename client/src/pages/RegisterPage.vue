@@ -539,6 +539,14 @@ async function copyReference() {
 
           <div class="form-section-title">Payment</div>
 
+          <!-- Above the options rather than under them: the deadline applies to
+               every method and changes which one a family can realistically
+               use, so it has to be read before the choice is made. -->
+          <div v-if="pay.paymentDeadline" class="pay-deadline">
+            <q-icon name="event_available" size="18px" class="pay-deadline__icon" />
+            <div>{{ pay.paymentDeadline }}</div>
+          </div>
+
           <div v-if="selectableTiers.length" class="q-mb-md">
             <q-option-group
               v-model="form.payment.tierId"
@@ -619,7 +627,13 @@ async function copyReference() {
             </template>
 
             <template v-else>
-              <div>Bring cash to any practice and hand it to a coach.</div>
+              <!-- Deliberately not "any practice, any coach": cash is handled
+                   at the parent meeting or by arrangement, and the deadline
+                   above is what actually governs when it is due. -->
+              <div>
+                Cash can be brought to the parent meeting, or arranged with a
+                Team Coordinator.
+              </div>
             </template>
 
             <div v-if="pay.instructions" class="q-mt-sm">{{ pay.instructions }}</div>
@@ -664,6 +678,32 @@ async function copyReference() {
   margin: 0 0 8px;
   font-size: 0.88rem;
   color: var(--grey-600, #6b7280);
+}
+
+/*
+ * Deliberately heavier than .pay-note. This is a deadline with money attached,
+ * and the copy it replaced ("bring cash to any practice") was being read as
+ * open-ended, so it needs to carry more weight than a footnote.
+ */
+.pay-deadline {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--grey-300);
+  border-left: 4px solid var(--navy-800);
+  border-radius: var(--radius-sm);
+  background: var(--grey-050);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--navy-900);
+}
+
+.pay-deadline__icon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--navy-800);
 }
 
 /*

@@ -162,6 +162,19 @@ export interface OrganizationPayment {
   checkPayableTo: string
   /** Where cheques should be mailed, one line per entry. */
   mailingAddress: string[]
+  /**
+   * When payment is due, shown prominently above the payment options.
+   *
+   * Separate from `instructions` because it applies to every payment method
+   * and needs to be read before one is chosen, whereas instructions sit under
+   * the method-specific detail. Editable here so next season's dates do not
+   * need a code change.
+   *
+   * Note that clearing this in the dashboard restores this default rather than
+   * hiding the notice — blank strings fall back, see mergeSection. To retire
+   * it, replace the wording instead of emptying the field.
+   */
+  paymentDeadline: string
   /** Free text shown under the payment instructions. */
   instructions: string
   tiers: PricingTier[]
@@ -223,6 +236,12 @@ export const defaultOrganization: OrganizationSettings = {
     zelleQrImageUrl: '',
     checkPayableTo: 'Trojans Wrestling Club',
     mailingAddress: [],
+    paymentDeadline:
+      'All payment for standard registration is due by Sunday, October 18th. ' +
+      'Cash and Check can be brought to the parent meeting which will be ' +
+      'mid-October or can be arranged with a Team Coordinator when receiving ' +
+      'the registration follow up email. Cash pay for late registration is due ' +
+      'at the time of the first practice on November 2nd, 2026.',
     instructions:
       'Include your registration reference code in the memo so we can match ' +
       'your payment to your registration.',
