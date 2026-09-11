@@ -305,6 +305,21 @@ export interface Sponsor {
   /** Copy supplied by the business for its card. Plain text, never HTML. */
   blurb: string
   logoUrl?: string
+  /**
+   * Optional brand colours, '#RRGGBB', washed into opposite corners of the
+   * card: start at the top left, end at the bottom right.
+   *
+   * Colours rather than a background image, deliberately. An image cannot be
+   * checked for contrast — a dark gradient or a busy photo would swallow the
+   * dark text on the card, and there is no way to validate that server-side.
+   * A corner wash leaves the middle of the card white by construction, so any
+   * pair of colours is safe, and it costs no hosting and cannot 404.
+   *
+   * Rendered at partial opacity, so even #000000 becomes a soft wash rather
+   * than a black corner.
+   */
+  brandColorStart?: string
+  brandColorEnd?: string
   websiteUrl?: string
   /**
    * The business's public line, as it would appear on their own website.

@@ -42,6 +42,50 @@ export function isSafeUrl(url: string | undefined | null): boolean {
   return /^https?:\/\//i.test((url ?? '').trim())
 }
 
+const HEX_COLOR = /^#[0-9a-f]{6}$/i
+
+export function isHexColor(value: string | undefined | null): boolean {
+  return HEX_COLOR.test((value ?? '').trim())
+}
+
+/**
+ * How strongly a brand colour is washed into a card corner, as a hex alpha.
+ *
+ * 0x59 is 35%. Capped so that even #000000 lands as a soft grey wash rather
+ * than a black corner, which is what makes any pair of colours safe to accept
+ * without checking them against the card's dark text.
+ */
+const TINT_ALPHA = '59'
+
+/**
+ * Inline background for a sponsor card, or null when no colours are set.
+ *
+ * Two layered gradients, each fading to transparent well before the middle, so
+ * the centre of the card stays white and the text on it stays legible whatever
+ * colours the sponsor picked. Returning null rather than a white background
+ * keeps the stylesheet in charge of the default.
+ */
+export function cardBackground(sponsor: {
+  brandColorStart?: string | undefined
+  brandColorEnd?: string | undefined
+}): string | null {
+  const start = isHexColor(sponsor.brandColorStart) ? sponsor.brandColorStart!.trim() : null
+  const end = isHexColor(sponsor.brandColorEnd) ? sponsor.brandColorEnd!.trim() : null
+  if (!start && !end) return null
+
+  const layers: string[] = []
+  // 135deg runs top-left to bottom-right, so the first stop sits in the top
+  // left corner; 315deg is the same axis reversed, putting it bottom right.
+  if (start) {
+    layers.push(`linear-gradient(135deg, ${start}${TINT_ALPHA} 0%, rgba(255,255,255,0) 34%)`)
+  }
+  if (end) {
+    layers.push(`linear-gradient(315deg, ${end}${TINT_ALPHA} 0%, rgba(255,255,255,0) 34%)`)
+  }
+
+  return layers.join(', ')
+}
+
 /** Socials reduced to the entries that are actually safe to link. */
 export function safeSocials(socials: SponsorSocials | undefined): {
   key: keyof SponsorSocials

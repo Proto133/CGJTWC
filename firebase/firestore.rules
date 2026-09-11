@@ -351,7 +351,8 @@ service cloud.firestore {
     // whole write.
     function isValidSponsor() {
       let d = request.resource.data;
-      return d.keys().hasOnly(['name', 'blurb', 'logoUrl', 'websiteUrl', 'phone',
+      return d.keys().hasOnly(['name', 'blurb', 'logoUrl', 'brandColorStart',
+                               'brandColorEnd', 'websiteUrl', 'phone',
                                'socials', 'links', 'tier', 'order', 'active',
                                'createdAt', 'updatedAt'])
              && d.keys().hasAll(['name', 'tier', 'order', 'active'])
@@ -361,6 +362,10 @@ service cloud.firestore {
              && d.active is bool
              && (!('blurb' in d.keys()) || (d.blurb is string && d.blurb.size() <= 1200))
              && (!('logoUrl' in d.keys()) || isWebUrl(d.logoUrl))
+             // Six-digit hex only. Pinned this tightly because the value goes
+             // straight into a style attribute; anything else is refused.
+             && (!('brandColorStart' in d.keys()) || isHexColor(d.brandColorStart))
+             && (!('brandColorEnd' in d.keys()) || isHexColor(d.brandColorEnd))
              && (!('websiteUrl' in d.keys()) || isWebUrl(d.websiteUrl))
              // The business's public line. The internal contact number lives
              // in the private subcollection and must never appear here.
@@ -399,6 +404,12 @@ service cloud.firestore {
              && (!('instagram' in s.keys()) || isWebUrl(s.instagram))
              && (!('x' in s.keys()) || isWebUrl(s.x))
              && (!('linkedin' in s.keys()) || isWebUrl(s.linkedin));
+    }
+
+    // Empty is allowed because clearing a colour has to write something.
+    function isHexColor(value) {
+      return value is string
+             && (value == '' || value.matches('^#[0-9a-fA-F]{6}$'));
     }
 
     // http(s) only. These end up in an href or an img src, so a javascript: or

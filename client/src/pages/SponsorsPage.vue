@@ -5,6 +5,7 @@ import { useSponsorsStore } from 'stores/sponsors'
 import { useSettingsStore } from 'stores/settings'
 import {
   activeSponsors,
+  cardBackground,
   groupByTier,
   isSafeUrl,
   safeSocials,
@@ -96,6 +97,7 @@ useMeta(() => ({
               :key="sponsor.id"
               class="sponsor-card"
               :class="`sponsor-card--${sponsor.tier}`"
+              :style="{ backgroundImage: cardBackground(sponsor) ?? undefined }"
             >
               <!-- Fixed box with contain: sponsor logos arrive in wildly
                    different aspect ratios and a naive grid looks broken at once. -->

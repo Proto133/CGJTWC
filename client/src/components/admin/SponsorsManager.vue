@@ -3,9 +3,11 @@ import { computed, ref } from 'vue'
 import { Dialog } from 'quasar'
 import { useSponsorsStore } from 'stores/sponsors'
 import {
+  cardBackground,
   describeChange,
   effectiveValue,
   groupByTier,
+  isHexColor,
   isSafeUrl,
   SPONSOR_LINK_LIMIT,
   tierLabel,
@@ -32,6 +34,8 @@ interface FormState {
   name: string
   blurb: string
   logoUrl: string
+  brandColorStart: string
+  brandColorEnd: string
   websiteUrl: string
   phone: string
   facebook: string
@@ -56,7 +60,9 @@ interface FormState {
 
 function blankForm(): FormState {
   return {
-    name: '', blurb: '', logoUrl: '', websiteUrl: '', phone: '',
+    name: '', blurb: '', logoUrl: '',
+    brandColorStart: '', brandColorEnd: '',
+    websiteUrl: '', phone: '',
     facebook: '', instagram: '', x: '', linkedin: '',
     links: [],
     tier: 'bronze', order: 0, active: true,
@@ -115,6 +121,8 @@ async function openEdit(sponsor: Sponsor) {
     name: sponsor.name,
     blurb: sponsor.blurb ?? '',
     logoUrl: sponsor.logoUrl ?? '',
+    brandColorStart: sponsor.brandColorStart ?? '',
+    brandColorEnd: sponsor.brandColorEnd ?? '',
     websiteUrl: sponsor.websiteUrl ?? '',
     phone: sponsor.phone ?? '',
     facebook: sponsor.socials?.facebook ?? '',
@@ -291,6 +299,22 @@ function normaliseLinkUrl(link: SponsorLink) {
 const badLinks = computed(() =>
   form.value.links.some((l) => linkIncomplete(l) || linkUrlInvalid(l)))
 
+/** A typed colour that is not six-digit hex. Empty is fine — it means none. */
+function colorInvalid(field: 'brandColorStart' | 'brandColorEnd'): boolean {
+  const value = form.value[field].trim()
+  return value !== '' && !isHexColor(value)
+}
+
+const badColors = computed(() =>
+  colorInvalid('brandColorStart') || colorInvalid('brandColorEnd'))
+
+/** The card background as the public page will render it. */
+const previewBackground = computed(() =>
+  cardBackground({
+    brandColorStart: form.value.brandColorStart,
+    brandColorEnd: form.value.brandColorEnd,
+  }) ?? 'none')
+
 const badLogo = computed(() => urlInvalid('logoUrl'))
 const badWebsite = computed(() => urlInvalid('websiteUrl'))
 const badSocials = computed(() => socialFields.some((f) => urlInvalid(f.key)))
@@ -298,6 +322,7 @@ const badSocials = computed(() => socialFields.some((f) => urlInvalid(f.key)))
 const canSave = computed(() =>
   form.value.name.trim() !== ''
   && !badLogo.value
+  && !badColors.value
   && !badWebsite.value
   && !badSocials.value
   && !badLinks.value)
@@ -309,6 +334,8 @@ function buildPayload() {
       name: f.name.trim(),
       blurb: f.blurb.trim(),
       logoUrl: f.logoUrl.trim(),
+      brandColorStart: f.brandColorStart.trim(),
+      brandColorEnd: f.brandColorEnd.trim(),
       websiteUrl: f.websiteUrl.trim(),
       phone: f.phone.trim(),
       socials: {
@@ -482,6 +509,63 @@ async function recalculate() {
               </div>
             </div>
           </div>
+          <div>
+            <div class="block-label q-mb-xs">Brand colours</div>
+            <div class="social-note q-mb-sm">
+              Optional. Washed into opposite corners of the card, leaving the
+              middle white so the text stays readable whatever you pick. Any
+              colour is safe — they are applied as a tint, not a fill.
+            </div>
+            <div class="row q-col-gutter-sm items-start">
+              <div class="col-12 col-sm-4">
+                <q-input
+                  v-model="form.brandColorStart"
+                  label="Top left"
+                  placeholder="#00205B"
+                  outlined
+                  dense
+                  :error="colorInvalid('brandColorStart')"
+                  error-message="Six-digit hex, e.g. #00205B"
+                >
+                  <template #append>
+                    <q-icon name="palette" class="cursor-pointer">
+                      <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                        <q-color v-model="form.brandColorStart" format-model="hex" no-header-tabs />
+                      </q-popup-proxy>
+                    </q-icon>
+                  </template>
+                </q-input>
+              </div>
+              <div class="col-12 col-sm-4">
+                <q-input
+                  v-model="form.brandColorEnd"
+                  label="Bottom right"
+                  placeholder="#4FD1C5"
+                  outlined
+                  dense
+                  :error="colorInvalid('brandColorEnd')"
+                  error-message="Six-digit hex, e.g. #4FD1C5"
+                >
+                  <template #append>
+                    <q-icon name="palette" class="cursor-pointer">
+                      <q-popup-proxy cover transition-show="scale" transition-hide="scale">
+                        <q-color v-model="form.brandColorEnd" format-model="hex" no-header-tabs />
+                      </q-popup-proxy>
+                    </q-icon>
+                  </template>
+                </q-input>
+              </div>
+              <div class="col-12 col-sm-4">
+                <!-- Rendered with the same function the public page uses, so
+                     this is the card, not an approximation of it. -->
+                <div class="colour-preview" :style="{ backgroundImage: previewBackground }">
+                  <span class="colour-preview__name">{{ form.name || 'Company name' }}</span>
+                  <span class="colour-preview__text">Card copy sits here</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <q-input
             v-model="form.websiteUrl"
             label="Website"
@@ -809,6 +893,29 @@ async function recalculate() {
   color: var(--navy-800);
   display: flex;
   align-items: center;
+}
+
+.colour-preview {
+  height: 92px;
+  border: 1px solid var(--grey-200);
+  border-radius: var(--radius-sm);
+  background-color: #fff;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+
+.colour-preview__name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--navy-800);
+}
+
+.colour-preview__text {
+  font-size: 0.78rem;
+  color: var(--grey-600);
 }
 
 .logo-check {
