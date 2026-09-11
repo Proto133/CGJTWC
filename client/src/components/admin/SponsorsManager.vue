@@ -139,13 +139,56 @@ function closeForm() {
   editingId.value = null
 }
 
-const badLogo = computed(() =>
-  form.value.logoUrl.trim() !== '' && !isSafeUrl(form.value.logoUrl))
-const badWebsite = computed(() =>
-  form.value.websiteUrl.trim() !== '' && !isSafeUrl(form.value.websiteUrl))
+/**
+ * The four social fields, so the inputs and their examples stay in one place.
+ *
+ * Every one of these must be a full http(s) URL, because that is what the
+ * security rules enforce. Without a matching check here the rules would refuse
+ * the write and the admin would see a generic save failure naming no field.
+ */
+const socialFields = [
+  { key: 'facebook', label: 'Facebook', example: 'https://facebook.com/yourbusiness' },
+  { key: 'instagram', label: 'Instagram', example: 'https://instagram.com/yourbusiness' },
+  { key: 'x', label: 'X', example: 'https://x.com/yourbusiness' },
+  { key: 'linkedin', label: 'LinkedIn', example: 'https://linkedin.com/company/yourbusiness' },
+] as const
+
+type UrlField = 'logoUrl' | 'websiteUrl' | typeof socialFields[number]['key']
+
+function urlInvalid(field: UrlField): boolean {
+  const value = form.value[field].trim()
+  return value !== '' && !isSafeUrl(value)
+}
+
+/**
+ * Adds the scheme to a bare domain on blur, e.g. "facebook.com/acme".
+ *
+ * Only ever prepends https:// to something already shaped like a domain. A
+ * bare handle such as "@acme" is left alone to fail validation visibly, since
+ * turning it into a URL would mean guessing the profile path — LinkedIn alone
+ * has both /company/ and /in/, and picking wrong produces a link that looks
+ * right and goes nowhere.
+ */
+function normaliseUrl(field: UrlField) {
+  const value = form.value[field].trim()
+  if (value === '' || isSafeUrl(value)) {
+    form.value[field] = value
+    return
+  }
+  if (/^[\w-]+(\.[\w-]+)+(\/|$)/.test(value)) {
+    form.value[field] = `https://${value}`
+  }
+}
+
+const badLogo = computed(() => urlInvalid('logoUrl'))
+const badWebsite = computed(() => urlInvalid('websiteUrl'))
+const badSocials = computed(() => socialFields.some((f) => urlInvalid(f.key)))
 
 const canSave = computed(() =>
-  form.value.name.trim() !== '' && !badLogo.value && !badWebsite.value)
+  form.value.name.trim() !== ''
+  && !badLogo.value
+  && !badWebsite.value
+  && !badSocials.value)
 
 function buildPayload() {
   const f = form.value
@@ -287,15 +330,18 @@ async function recalculate() {
             label="Logo URL"
             outlined
             :error="badLogo"
-            error-message="Must start with http:// or https://"
-            hint="Paste a link to the logo image. Uploads arrive with the storage work."
+            error-message="Must be a full link starting http:// or https://"
+            hint="Direct link to the image file, e.g. https://acme.com/logo.png. Uploads arrive with the storage work."
+            @blur="normaliseUrl('logoUrl')"
           />
           <q-input
             v-model="form.websiteUrl"
             label="Website"
             outlined
             :error="badWebsite"
-            error-message="Must start with http:// or https://"
+            error-message="Must be a full link starting http:// or https://"
+            hint="https://acme.com"
+            @blur="normaliseUrl('websiteUrl')"
           />
           <q-input
             v-model="form.phone"
@@ -303,18 +349,22 @@ async function recalculate() {
             outlined
             hint="The company's public line. Shown on the sponsorship page."
           />
+          <div class="social-note">
+            Socials need the full link from the address bar, not a handle. Typing
+            a bare domain is fine — it gets the https:// added for you.
+          </div>
           <div class="row q-col-gutter-sm">
-            <div class="col-12 col-sm-6">
-              <q-input v-model="form.facebook" label="Facebook" outlined dense />
-            </div>
-            <div class="col-12 col-sm-6">
-              <q-input v-model="form.instagram" label="Instagram" outlined dense />
-            </div>
-            <div class="col-12 col-sm-6">
-              <q-input v-model="form.x" label="X" outlined dense />
-            </div>
-            <div class="col-12 col-sm-6">
-              <q-input v-model="form.linkedin" label="LinkedIn" outlined dense />
+            <div v-for="field in socialFields" :key="field.key" class="col-12 col-sm-6">
+              <q-input
+                v-model="form[field.key]"
+                :label="field.label"
+                :hint="field.example"
+                :error="urlInvalid(field.key)"
+                error-message="Must be a full link starting http:// or https://"
+                outlined
+                dense
+                @blur="normaliseUrl(field.key)"
+              />
             </div>
           </div>
           <div class="row q-col-gutter-sm items-center">
@@ -548,6 +598,12 @@ async function recalculate() {
   color: var(--navy-800);
   display: flex;
   align-items: center;
+}
+
+.social-note {
+  font-size: 0.8rem;
+  color: var(--grey-500);
+  line-height: 1.5;
 }
 
 .unranked-note {
