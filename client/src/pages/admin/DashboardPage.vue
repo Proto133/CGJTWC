@@ -22,6 +22,7 @@ import FeedbackBoard from 'components/admin/FeedbackBoard.vue'
 import AccountsVault from 'components/admin/AccountsVault.vue'
 import MentionsQueue from 'components/admin/MentionsQueue.vue'
 import MessagesInbox from 'components/admin/MessagesInbox.vue'
+import AdminThreads from 'components/admin/AdminThreads.vue'
 import type {
   Announcement,
   StaffMember,
@@ -40,6 +41,7 @@ type Tab =
   | 'access'
   | 'mentions'
   | 'feedback'
+  | 'discussion'
   | 'accounts'
   | 'settings'
 
@@ -243,6 +245,7 @@ function confirmDeleteStaff(member: StaffMember) {
           {{ ticketsStore.tickets.filter((t) => t.status !== 'completed').length }}
         </q-badge>
       </q-tab>
+      <q-tab name="discussion" label="Discussion" icon="forum" />
       <q-tab name="accounts" icon="vpn_key">
         <span class="q-ml-sm">Accounts</span>
         <q-icon
@@ -431,6 +434,11 @@ function confirmDeleteStaff(member: StaffMember) {
       <!-- FEEDBACK -->
       <q-tab-panel name="feedback" class="q-px-none">
         <FeedbackBoard />
+      </q-tab-panel>
+
+      <!-- DISCUSSION -->
+      <q-tab-panel name="discussion" class="q-px-none">
+        <AdminThreads />
       </q-tab-panel>
 
       <!-- ACCOUNT VAULT -->

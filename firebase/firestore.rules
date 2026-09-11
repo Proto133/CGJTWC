@@ -128,6 +128,28 @@ service cloud.firestore {
       }
     }
 
+    // ============ ADMIN DISCUSSION THREADS ============
+    // Wholly internal, and likely to mention families by name while sorting
+    // something out, so there is no public access at any level.
+    match /adminThreads/{threadId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidThread();
+      // Only the flags and the activity stamp may move after creation; the
+      // title and its provenance are fixed.
+      allow update: if isAdmin() && isValidThreadUpdate();
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow read: if isAdmin();
+        allow create: if isAdmin() && isValidThreadMessage();
+        // Immutable once posted, as with ticket comments: a discussion others
+        // have replied to should not be rewritten underneath them.
+        allow update: if false;
+        allow delete: if isOwner()
+                      || (isAdmin() && resource.data.authorUid == request.auth.uid);
+      }
+    }
+
     // ============ ACCOUNT VAULT ============
     // Stored account credentials. Passwords are encrypted in the browser before
     // they ever reach Firestore; the passphrase is never sent here. These rules
@@ -432,6 +454,45 @@ service cloud.firestore {
       return value is string
              && value.size() <= 500
              && (value == '' || value.matches('^https?://.*'));
+    }
+
+    function isValidThread() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['title', 'createdByUid', 'createdByEmail', 'createdAt',
+                               'lastMessageAt', 'messageCount', 'pinned', 'resolved'])
+             && d.keys().hasAll(['title', 'createdByUid', 'createdByEmail',
+                                 'createdAt', 'messageCount', 'pinned', 'resolved'])
+             && d.title is string && d.title.size() > 0 && d.title.size() <= 140
+             // Attribution cannot be forged.
+             && d.createdByUid == request.auth.uid
+             && d.createdByEmail is string && d.createdByEmail.size() <= 120
+             && d.createdAt == request.time
+             && d.messageCount is int && d.messageCount >= 0
+             && d.pinned is bool
+             && d.resolved is bool;
+    }
+
+    function isValidThreadUpdate() {
+      let d = request.resource.data;
+      let prior = resource.data;
+      return d.title == prior.title
+             && d.createdByUid == prior.createdByUid
+             && d.createdByEmail == prior.createdByEmail
+             && d.createdAt == prior.createdAt
+             && d.pinned is bool
+             && d.resolved is bool
+             && d.messageCount is int && d.messageCount >= 0;
+    }
+
+    function isValidThreadMessage() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['body', 'authorUid', 'authorEmail', 'createdAt'])
+             && d.keys().hasAll(['body', 'authorUid', 'authorEmail', 'createdAt'])
+             && d.body is string && d.body.size() > 0 && d.body.size() <= 4000
+             // You can only speak as yourself.
+             && d.authorUid == request.auth.uid
+             && d.authorEmail is string && d.authorEmail.size() <= 120
+             && d.createdAt == request.time;
     }
 
     function isValidStaff() {

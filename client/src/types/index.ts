@@ -92,6 +92,41 @@ export interface ContactFormPayload {
   message: string
 }
 
+// ---------------------------------------------------------------------------
+// Admin discussion threads
+// ---------------------------------------------------------------------------
+//
+//   adminThreads/{id}                admin only
+//   adminThreads/{id}/messages/{id}  admin only
+//
+// Entirely internal. Threads rather than a flat chat on purpose: without Cloud
+// Functions nothing can notify anybody, and a threaded board is asynchronous by
+// nature, whereas a chat that nobody is alerted to is a noticeboard pretending
+// to be a conversation.
+
+export interface AdminThread {
+  id: string
+  title: string
+  createdByUid: string
+  createdByEmail: string
+  createdAt: Timestamp
+  /** Drives the sort, so the liveliest discussion is at the top. */
+  lastMessageAt?: Timestamp
+  messageCount: number
+  /** Kept at the top of the list regardless of activity. */
+  pinned: boolean
+  /** Resolved threads stay readable but drop below the open ones. */
+  resolved: boolean
+}
+
+export interface AdminThreadMessage {
+  id: string
+  body: string
+  authorUid: string
+  authorEmail: string
+  createdAt: Timestamp
+}
+
 export type AdminRole = 'owner' | 'admin'
 
 export interface AdminDoc {
