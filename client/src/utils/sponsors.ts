@@ -11,6 +11,14 @@ import type { Sponsor, SponsorSocials, SponsorTier } from 'src/types'
 /** Highest first. Also the display order on the public page. */
 export const SPONSOR_TIERS: SponsorTier[] = ['gold', 'silver', 'bronze']
 
+/**
+ * How many extra labelled links a sponsor may have.
+ *
+ * Mirrored by an explicit per-index check in firestore.rules, which cannot
+ * loop. Changing this number here alone will not raise the real limit.
+ */
+export const SPONSOR_LINK_LIMIT = 3
+
 const TIER_LABELS: Record<SponsorTier, string> = {
   gold: 'Gold',
   silver: 'Silver',

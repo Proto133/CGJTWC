@@ -7,12 +7,13 @@ import {
   effectiveValue,
   groupByTier,
   isSafeUrl,
+  SPONSOR_LINK_LIMIT,
   tierLabel,
   unrankedSponsors,
   type SplitInput,
 } from 'src/utils/sponsors'
 import { parseUsDate } from 'src/utils/usDate'
-import type { Sponsor, SponsorPrivate, SponsorTier } from 'src/types'
+import type { Sponsor, SponsorLink, SponsorPrivate, SponsorTier } from 'src/types'
 
 /**
  * The sponsors tab.
@@ -37,6 +38,7 @@ interface FormState {
   instagram: string
   x: string
   linkedin: string
+  links: SponsorLink[]
   tier: SponsorTier
   order: number
   active: boolean
@@ -56,6 +58,7 @@ function blankForm(): FormState {
   return {
     name: '', blurb: '', logoUrl: '', websiteUrl: '', phone: '',
     facebook: '', instagram: '', x: '', linkedin: '',
+    links: [],
     tier: 'bronze', order: 0, active: true,
     contactName: '', contactEmail: '', contactPhone: '',
     amount: null, inKindValue: null, tierLocked: false,
@@ -100,6 +103,7 @@ async function openNew() {
   await store.loadAllDetails()
   editingId.value = null
   form.value = blankForm()
+  logoProbe.value = { state: 'idle' }
   showForm.value = true
 }
 
@@ -117,6 +121,9 @@ async function openEdit(sponsor: Sponsor) {
     instagram: sponsor.socials?.instagram ?? '',
     x: sponsor.socials?.x ?? '',
     linkedin: sponsor.socials?.linkedin ?? '',
+    // Copied rather than referenced, so cancelling an edit does not leave the
+    // store's copy mutated.
+    links: (sponsor.links ?? []).map((l) => ({ ...l })),
     tier: sponsor.tier,
     order: sponsor.order,
     active: sponsor.active,
@@ -132,11 +139,15 @@ async function openEdit(sponsor: Sponsor) {
   }
   editingId.value = sponsor.id
   showForm.value = true
+  // Checked on open, not just on edit, so a logo that has since gone missing
+  // from the sponsor's own server is noticed rather than silently broken.
+  probeLogo()
 }
 
 function closeForm() {
   showForm.value = false
   editingId.value = null
+  logoProbe.value = { state: 'idle' }
 }
 
 /**
@@ -180,6 +191,106 @@ function normaliseUrl(field: UrlField) {
   }
 }
 
+/**
+ * Under this, a logo renders visibly small on the card.
+ *
+ * The card caps a logo at 96px tall and never scales one up, because enlarging
+ * a small bitmap just produces a blurry one. So a favicon handed over as "our
+ * logo" does not fill the space, it sits in the middle of it looking broken.
+ */
+const MIN_LOGO_WIDTH = 200
+
+type LogoProbe =
+  | { state: 'idle' }
+  | { state: 'loading' }
+  | { state: 'error' }
+  | { state: 'ok'; width: number; height: number }
+
+const logoProbe = ref<LogoProbe>({ state: 'idle' })
+/** Guards against a slow earlier probe resolving after a newer one. */
+let probeToken = 0
+
+/**
+ * Loads the logo to find out whether it exists and how big it is.
+ *
+ * Reading naturalWidth needs no CORS headers, unlike reading pixels, so this
+ * works against any host. It is the only way to catch the two failures that
+ * otherwise reach the public page unnoticed: a URL that 404s, and an image far
+ * too small to use.
+ */
+function probeLogo() {
+  const url = form.value.logoUrl.trim()
+  const token = ++probeToken
+
+  if (!isSafeUrl(url)) {
+    logoProbe.value = { state: 'idle' }
+    return
+  }
+
+  logoProbe.value = { state: 'loading' }
+  const img = new Image()
+  img.onload = () => {
+    if (token !== probeToken) return
+    logoProbe.value = { state: 'ok', width: img.naturalWidth, height: img.naturalHeight }
+  }
+  img.onerror = () => {
+    if (token !== probeToken) return
+    logoProbe.value = { state: 'error' }
+  }
+  img.src = url
+}
+
+/**
+ * True only for a raster image we know is too small.
+ *
+ * An SVG with no intrinsic size reports zero, which is not a problem — vectors
+ * scale — so a zero is treated as "nothing to say" rather than as tiny.
+ */
+const logoTooSmall = computed(() =>
+  logoProbe.value.state === 'ok'
+  && logoProbe.value.width > 0
+  && logoProbe.value.width < MIN_LOGO_WIDTH)
+
+function addLink() {
+  if (form.value.links.length >= SPONSOR_LINK_LIMIT) return
+  form.value.links.push({ label: '', url: '' })
+}
+
+function removeLink(index: number) {
+  form.value.links.splice(index, 1)
+}
+
+/**
+ * Rows with one half filled in.
+ *
+ * An entirely empty row is dropped silently on save, since that is just an
+ * unused slot. A half-filled one is a mistake worth stopping: the rules reject
+ * it outright, and a labelless link or a label pointing nowhere is not
+ * something to publish.
+ */
+function linkIncomplete(link: SponsorLink): boolean {
+  const hasLabel = link.label.trim() !== ''
+  const hasUrl = link.url.trim() !== ''
+  return hasLabel !== hasUrl
+}
+
+function linkUrlInvalid(link: SponsorLink): boolean {
+  const url = link.url.trim()
+  return url !== '' && !isSafeUrl(url)
+}
+
+function normaliseLinkUrl(link: SponsorLink) {
+  const value = link.url.trim()
+  if (value === '' || isSafeUrl(value)) {
+    link.url = value
+    return
+  }
+  if (/^[\w-]+(\.[\w-]+)+(\/|$)/.test(value)) link.url = `https://${value}`
+}
+
+const badLinks = computed(() =>
+  form.value.links.some((l) => linkIncomplete(l) || linkUrlInvalid(l)))
+
 const badLogo = computed(() => urlInvalid('logoUrl'))
 const badWebsite = computed(() => urlInvalid('websiteUrl'))
 const badSocials = computed(() => socialFields.some((f) => urlInvalid(f.key)))
@@ -188,7 +299,8 @@ const canSave = computed(() =>
   form.value.name.trim() !== ''
   && !badLogo.value
   && !badWebsite.value
-  && !badSocials.value)
+  && !badSocials.value
+  && !badLinks.value)
 
 function buildPayload() {
   const f = form.value
@@ -205,6 +317,11 @@ function buildPayload() {
         x: f.x.trim(),
         linkedin: f.linkedin.trim(),
       },
+      // Unused rows are dropped rather than stored as empty pairs, which the
+      // rules would reject anyway.
+      links: f.links
+        .filter((l) => l.label.trim() !== '' && l.url.trim() !== '')
+        .map((l) => ({ label: l.label.trim(), url: l.url.trim() })),
       tier: f.tier,
       order: f.order,
       active: f.active,
@@ -331,9 +448,40 @@ async function recalculate() {
             outlined
             :error="badLogo"
             error-message="Must be a full link starting http:// or https://"
-            hint="Direct link to the image file, e.g. https://acme.com/logo.png. Uploads arrive with the storage work."
-            @blur="normaliseUrl('logoUrl')"
+            hint="PNG or SVG, transparent background, at least 400px wide. Link straight to the image file, not to a page. Uploads arrive with the storage work."
+            @blur="normaliseUrl('logoUrl'); probeLogo()"
           />
+
+          <div v-if="logoProbe.state !== 'idle'" class="logo-check">
+            <div v-if="logoProbe.state === 'loading'" class="social-note">
+              <q-spinner size="14px" class="q-mr-xs" /> Checking the image…
+            </div>
+
+            <div v-else-if="logoProbe.state === 'error'" class="logo-check__bad">
+              <q-icon name="error_outline" size="16px" class="q-mr-xs" />
+              That image did not load. Check the link opens the picture itself,
+              not the page it sits on.
+            </div>
+
+            <div v-else class="logo-check__ok">
+              <!-- Shown at the real card size, so the preview is the answer to
+                   "will this look right" rather than a guess. -->
+              <div class="logo-check__preview">
+                <img :src="form.logoUrl" :alt="`${form.name || 'Sponsor'} logo preview`" />
+              </div>
+              <div>
+                <div v-if="logoProbe.width > 0" class="social-note">
+                  {{ logoProbe.width }} × {{ logoProbe.height }}px
+                </div>
+                <div v-else class="social-note">Scalable image</div>
+                <div v-if="logoTooSmall" class="logo-check__warn">
+                  That is smaller than {{ MIN_LOGO_WIDTH }}px wide, so it will
+                  sit small on the card rather than filling it. Worth asking for
+                  a bigger PNG or an SVG — this looks like a favicon.
+                </div>
+              </div>
+            </div>
+          </div>
           <q-input
             v-model="form.websiteUrl"
             label="Website"
@@ -367,6 +515,69 @@ async function recalculate() {
               />
             </div>
           </div>
+          <div>
+            <div class="block-label q-mb-xs">Additional links</div>
+            <div class="social-note q-mb-sm">
+              Optional, up to {{ SPONSOR_LINK_LIMIT }}. For anything beyond the
+              website and socials — a booking page, reviews, a club offer. Both
+              boxes are needed for a row to be saved.
+            </div>
+
+            <div
+              v-for="(link, index) in form.links"
+              :key="index"
+              class="row q-col-gutter-sm items-start q-mb-xs"
+            >
+              <div class="col-12 col-sm-4">
+                <q-input
+                  v-model="link.label"
+                  label="Label"
+                  placeholder="Book a free estimate"
+                  outlined
+                  dense
+                  maxlength="40"
+                  :error="linkIncomplete(link) && link.label.trim() === ''"
+                  error-message="A link needs a label"
+                />
+              </div>
+              <div class="col-10 col-sm-7">
+                <q-input
+                  v-model="link.url"
+                  label="URL"
+                  placeholder="https://acme.com/estimate"
+                  outlined
+                  dense
+                  :error="linkUrlInvalid(link) || (linkIncomplete(link) && link.url.trim() === '')"
+                  :error-message="link.url.trim() === ''
+                    ? 'A link needs an address'
+                    : 'Must be a full link starting http:// or https://'"
+                  @blur="normaliseLinkUrl(link)"
+                />
+              </div>
+              <div class="col-2 col-sm-1 text-right">
+                <q-btn
+                  flat
+                  round
+                  dense
+                  icon="delete"
+                  color="negative"
+                  :aria-label="`Remove link ${index + 1}`"
+                  @click="removeLink(index)"
+                />
+              </div>
+            </div>
+
+            <q-btn
+              v-if="form.links.length < SPONSOR_LINK_LIMIT"
+              flat
+              dense
+              no-caps
+              icon="add"
+              label="Add link"
+              @click="addLink"
+            />
+          </div>
+
           <div class="row q-col-gutter-sm items-center">
             <div class="col-12 col-sm-4">
               <q-input
@@ -598,6 +809,47 @@ async function recalculate() {
   color: var(--navy-800);
   display: flex;
   align-items: center;
+}
+
+.logo-check {
+  margin-top: -6px;
+}
+
+.logo-check__ok {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Matches the public card's logo box, so the preview is like for like. */
+.logo-check__preview {
+  height: 96px;
+  width: 160px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--grey-300);
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+
+.logo-check__preview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.logo-check__bad {
+  font-size: 0.82rem;
+  color: var(--negative, #c10015);
+}
+
+.logo-check__warn {
+  font-size: 0.82rem;
+  color: var(--negative, #c10015);
+  line-height: 1.5;
+  max-width: 46ch;
 }
 
 .social-note {

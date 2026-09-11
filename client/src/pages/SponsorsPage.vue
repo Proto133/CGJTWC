@@ -139,6 +139,20 @@ useMeta(() => ({
                   <q-icon name="open_in_new" size="15px" />
                   {{ SOCIAL_LABELS[social.key] }}
                 </a>
+                <!-- Filtered again at render: the rules enforce http(s), but a
+                     document written before that rule existed would not be
+                     re-validated on read. -->
+                <a
+                  v-for="link in (sponsor.links ?? []).filter((l) => isSafeUrl(l.url))"
+                  :key="link.url"
+                  :href="link.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="sponsor-link"
+                >
+                  <q-icon name="arrow_forward" size="15px" />
+                  {{ link.label }}
+                </a>
               </div>
             </article>
           </div>

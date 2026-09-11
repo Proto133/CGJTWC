@@ -272,6 +272,17 @@ export interface StaffFormPayload {
 
 export type SponsorTier = 'gold' | 'silver' | 'bronze'
 
+/**
+ * An extra labelled link on a sponsor card, e.g. "Book a free estimate".
+ *
+ * Capped at SPONSOR_LINK_LIMIT. Security rules cannot loop, so each slot is
+ * validated by index; raising the cap means editing the rules too.
+ */
+export interface SponsorLink {
+  label: string
+  url: string
+}
+
 /** Optional business socials. A fixed set so rules can check each one. */
 export interface SponsorSocials {
   facebook?: string
@@ -305,6 +316,8 @@ export interface Sponsor {
    */
   phone?: string
   socials?: SponsorSocials
+  /** Extra labelled links, beyond the website and socials. */
+  links?: SponsorLink[]
   /**
    * Drives card size on the public page.
    *

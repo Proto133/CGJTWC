@@ -352,7 +352,7 @@ service cloud.firestore {
     function isValidSponsor() {
       let d = request.resource.data;
       return d.keys().hasOnly(['name', 'blurb', 'logoUrl', 'websiteUrl', 'phone',
-                               'socials', 'tier', 'order', 'active',
+                               'socials', 'links', 'tier', 'order', 'active',
                                'createdAt', 'updatedAt'])
              && d.keys().hasAll(['name', 'tier', 'order', 'active'])
              && d.name is string && d.name.size() > 0 && d.name.size() <= 120
@@ -365,7 +365,31 @@ service cloud.firestore {
              // The business's public line. The internal contact number lives
              // in the private subcollection and must never appear here.
              && (!('phone' in d.keys()) || (d.phone is string && d.phone.size() <= 40))
-             && (!('socials' in d.keys()) || isValidSocials(d.socials));
+             && (!('socials' in d.keys()) || isValidSocials(d.socials))
+             && (!('links' in d.keys()) || isValidSponsorLinks(d.links));
+    }
+
+    // Rules have no loops, so the list is bounded and each slot checked by
+    // index. Three is deliberate: a card already carries a website, a phone
+    // and four socials, and more than this turns it into a wall of links.
+    // Raising the cap means adding lines here as well as in the client.
+    function isValidSponsorLinks(list) {
+      return list is list
+             && list.size() <= 3
+             && (list.size() < 1 || isValidSponsorLink(list[0]))
+             && (list.size() < 2 || isValidSponsorLink(list[1]))
+             && (list.size() < 3 || isValidSponsorLink(list[2]));
+    }
+
+    function isValidSponsorLink(l) {
+      return l is map
+             && l.keys().hasOnly(['label', 'url'])
+             && l.keys().hasAll(['label', 'url'])
+             && l.label is string && l.label.size() > 0 && l.label.size() <= 40
+             // Unlike the optional URL fields, a link with no address is not a
+             // cleared value, it is a broken row.
+             && l.url is string && l.url.size() > 0 && l.url.size() <= 500
+             && l.url.matches('^https?://.*');
     }
 
     function isValidSocials(s) {
