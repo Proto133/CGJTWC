@@ -30,6 +30,14 @@ type Twttr = {
 
 const props = defineProps<{
   handle?: string
+  /**
+   * Most recent posts to show. Omit for all of them.
+   *
+   * The home page sets a small number: the feed sits beside the About text in
+   * a narrow column, and an unbounded list makes that column several times
+   * taller than its neighbour, leaving a long run of empty space next to it.
+   */
+  limit?: number
 }>()
 
 const settings = useSettingsStore()
@@ -52,15 +60,22 @@ const hasFeatured = computed(() => featuredPosts.value.length > 0)
  * returns an empty result set for this account, and rendering the posts
  * ourselves also means no third-party script and no syndication rate limits.
  */
-const apiPosts = computed(() => xFeed.posts)
+const allApiPosts = computed(() => xFeed.posts)
+const apiPosts = computed(() =>
+  props.limit ? allApiPosts.value.slice(0, props.limit) : allApiPosts.value)
 const hasApiPosts = computed(() => apiPosts.value.length > 0)
+
+/** True when the limit is actually hiding something, so the link earns itself. */
+const truncated = computed(() =>
+  props.limit !== undefined && allApiPosts.value.length > props.limit)
 
 /**
  * Posts by other accounts that an admin has explicitly approved. The query in
  * the store is what makes these readable at all — rules refuse anything that is
  * not already approved, so nothing unreviewed can reach this list.
  */
-const approvedMentions = computed(() => xMentions.approved)
+const approvedMentions = computed(() =>
+  props.limit ? xMentions.approved.slice(0, props.limit) : xMentions.approved)
 
 /**
  * The widget script is only needed when we have nothing of our own to show.
@@ -362,6 +377,17 @@ onBeforeUnmount(() => {
       </li>
     </ul>
 
+    <a
+      v-if="truncated"
+      class="x-more"
+      :href="`https://x.com/${handle}`"
+      target="_blank"
+      rel="noopener"
+    >
+      See more on X
+      <q-icon name="open_in_new" size="14px" />
+    </a>
+
     <!-- Mentions by other accounts, each individually approved by an admin.
          Labelled and visually separated so they are not mistaken for club
          announcements. -->
@@ -497,6 +523,15 @@ onBeforeUnmount(() => {
 
 .x-post__media img {
   width: 100%;
+  /*
+   * Capped because the feed sits in a narrow column. A portrait photo at
+   * width:100% with no ceiling renders taller than it is wide and on its own
+   * makes the column several times the height of the text beside it. Cover
+   * rather than contain: letterboxing would reintroduce the empty space this
+   * is meant to remove.
+   */
+  max-height: 240px;
+  object-fit: cover;
   border-radius: 10px;
   display: block;
 }
@@ -510,6 +545,21 @@ onBeforeUnmount(() => {
 }
 
 .x-post__date:hover {
+  text-decoration: underline;
+}
+
+.x-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 12px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--navy-800);
+  text-decoration: none;
+}
+
+.x-more:hover {
   text-decoration: underline;
 }
 

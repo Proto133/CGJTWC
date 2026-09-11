@@ -103,7 +103,10 @@ onUnmounted(() => {
         </div>
 
         <div class="col-12 col-md-5">
-          <XTimeline />
+          <!-- Capped: the full feed made this column far taller than the About
+               text beside it, stretching the section and leaving a long run of
+               empty space on the left. The full feed is a click away. -->
+          <XTimeline :limit="2" />
         </div>
       </section>
 
