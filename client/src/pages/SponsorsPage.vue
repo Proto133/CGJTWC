@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useMeta } from 'quasar'
 import { useSponsorsStore } from 'stores/sponsors'
 import { useSettingsStore } from 'stores/settings'
@@ -11,7 +11,7 @@ import {
   safeSocials,
   showTierHeadings,
 } from 'src/utils/sponsors'
-import type { SponsorSocials } from 'src/types'
+import type { Sponsor, SponsorSocials } from 'src/types'
 
 const sponsorsStore = useSponsorsStore()
 const settings = useSettingsStore()
@@ -39,6 +39,20 @@ const total = computed(() =>
   groups.value.reduce((sum, group) => sum + group.sponsors.length, 0))
 
 /**
+ * One dialog for the whole page, driven by whichever tile was opened.
+ *
+ * A dialog per card would put every sponsor's markup in the DOM permanently
+ * for the sake of one that is visible at a time.
+ */
+const selected = ref<Sponsor | null>(null)
+const detailOpen = ref(false)
+
+function openDetails(sponsor: Sponsor) {
+  selected.value = sponsor
+  detailOpen.value = true
+}
+
+/**
  * Displayed as typed, dialled as digits.
  *
  * The scheme is hardcoded rather than interpolated from input, and everything
@@ -55,6 +69,11 @@ const SOCIAL_LABELS: Record<keyof SponsorSocials, string> = {
   instagram: 'Instagram',
   x: 'X',
   linkedin: 'LinkedIn',
+}
+
+/** Extra links, re-filtered at render in case an older document predates the rule. */
+function extraLinks(sponsor: Sponsor) {
+  return (sponsor.links ?? []).filter((l) => isSafeUrl(l.url))
 }
 
 useMeta(() => ({
@@ -89,74 +108,36 @@ useMeta(() => ({
         <section v-for="group in groups" :key="group.tier" class="tier">
           <h2 v-if="withHeadings" class="tier__label">{{ group.label }}</h2>
 
-          <!-- The grid is capped rather than stretched: one sponsor on a wide
-               screen should look deliberate, not stranded across the viewport. -->
           <div class="sponsor-grid" :class="`sponsor-grid--${group.tier}`">
-            <article
+            <!-- A real button, not a div with a click handler: that buys
+                 keyboard access, Enter and Space, and focus styling for free,
+                 which a flip-on-hover card would have had to reimplement. -->
+            <button
               v-for="sponsor in group.sponsors"
               :key="sponsor.id"
-              class="sponsor-card"
-              :class="`sponsor-card--${sponsor.tier}`"
+              type="button"
+              class="sponsor-tile"
+              :class="`sponsor-tile--${sponsor.tier}`"
               :style="{ backgroundImage: cardBackground(sponsor) ?? undefined }"
+              :aria-label="`${sponsor.name} — sponsor details`"
+              @click="openDetails(sponsor)"
             >
-              <!-- Fixed box with contain: sponsor logos arrive in wildly
-                   different aspect ratios and a naive grid looks broken at once. -->
-              <div v-if="isSafeUrl(sponsor.logoUrl)" class="sponsor-card__logo">
-                <img :src="sponsor.logoUrl" :alt="sponsor.name" loading="lazy" />
+              <div class="sponsor-tile__logo">
+                <img
+                  v-if="isSafeUrl(sponsor.logoUrl)"
+                  :src="sponsor.logoUrl"
+                  alt=""
+                  loading="lazy"
+                />
+                <span v-else class="sponsor-tile__fallback">{{ sponsor.name }}</span>
               </div>
 
-              <h3 class="sponsor-card__name">{{ sponsor.name }}</h3>
-
-              <p v-if="sponsor.blurb" class="sponsor-card__blurb">{{ sponsor.blurb }}</p>
-
-              <div class="sponsor-card__links">
-                <!-- noopener so the target page cannot reach back through
-                     window.opener; noreferrer on every outbound link. -->
-                <a
-                  v-if="isSafeUrl(sponsor.websiteUrl)"
-                  :href="sponsor.websiteUrl"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="sponsor-link"
-                >
-                  <q-icon name="public" size="15px" />
-                  Website
-                </a>
-                <a
-                  v-if="sponsor.phone"
-                  :href="telHref(sponsor.phone)"
-                  class="sponsor-link"
-                >
-                  <q-icon name="call" size="15px" />
-                  {{ sponsor.phone }}
-                </a>
-                <a
-                  v-for="social in safeSocials(sponsor.socials)"
-                  :key="social.key"
-                  :href="social.url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="sponsor-link"
-                >
-                  <q-icon name="open_in_new" size="15px" />
-                  {{ SOCIAL_LABELS[social.key] }}
-                </a>
-                <!-- Filtered again at render: the rules enforce http(s), but a
-                     document written before that rule existed would not be
-                     re-validated on read. -->
-                <a
-                  v-for="link in (sponsor.links ?? []).filter((l) => isSafeUrl(l.url))"
-                  :key="link.url"
-                  :href="link.url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="sponsor-link"
-                >
-                  <q-icon name="arrow_forward" size="15px" />
-                  {{ link.label }}
-                </a>
-              </div>
-            </article>
+              <!-- Kept even though the tile is logo-led: plenty of logos are a
+                   symbol with no wordmark, and a wall of unidentifiable marks
+                   helps nobody. It also gives the tile a visible affordance. -->
+              <div class="sponsor-tile__name">{{ sponsor.name }}</div>
+              <div class="sponsor-tile__more">Details</div>
+            </button>
           </div>
         </section>
       </template>
@@ -182,6 +163,69 @@ useMeta(() => ({
         />
       </aside>
     </div>
+
+    <q-dialog v-model="detailOpen">
+      <q-card v-if="selected" class="detail-card">
+        <div
+          class="detail-card__head"
+          :style="{ backgroundImage: cardBackground(selected) ?? undefined }"
+        >
+          <div v-if="isSafeUrl(selected.logoUrl)" class="detail-card__logo">
+            <img :src="selected.logoUrl" :alt="selected.name" />
+          </div>
+          <h2 class="detail-card__name">{{ selected.name }}</h2>
+        </div>
+
+        <q-card-section>
+          <p v-if="selected.blurb" class="detail-card__blurb">{{ selected.blurb }}</p>
+
+          <div class="detail-card__links">
+            <!-- noopener so the target page cannot reach back through
+                 window.opener; noreferrer on every outbound link. -->
+            <a
+              v-if="isSafeUrl(selected.websiteUrl)"
+              :href="selected.websiteUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="sponsor-link"
+            >
+              <q-icon name="public" size="16px" />
+              Website
+            </a>
+            <a v-if="selected.phone" :href="telHref(selected.phone)" class="sponsor-link">
+              <q-icon name="call" size="16px" />
+              {{ selected.phone }}
+            </a>
+            <a
+              v-for="social in safeSocials(selected.socials)"
+              :key="social.key"
+              :href="social.url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="sponsor-link"
+            >
+              <q-icon name="open_in_new" size="16px" />
+              {{ SOCIAL_LABELS[social.key] }}
+            </a>
+            <a
+              v-for="link in extraLinks(selected)"
+              :key="link.url"
+              :href="link.url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="sponsor-link"
+            >
+              <q-icon name="arrow_forward" size="16px" />
+              {{ link.label }}
+            </a>
+          </div>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn v-close-popup flat no-caps label="Close" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -204,88 +248,148 @@ useMeta(() => ({
 
 .sponsor-grid {
   display: grid;
-  gap: 16px;
+  gap: 14px;
   /* auto-fill rather than auto-fit: auto-fit collapses empty tracks and would
-     stretch a single card across the whole row. */
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+     stretch a single tile across the whole row. */
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 }
 
 .sponsor-grid--gold {
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
 }
 
 .sponsor-grid--bronze {
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
 }
 
-.sponsor-card {
+.sponsor-tile {
+  /* Resetting the button's own chrome; everything visual is below. */
+  appearance: none;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+
   border: 1px solid var(--grey-200);
   border-radius: var(--radius-md);
-  background: #fff;
-  padding: 16px;
+  background-color: #fff;
+  padding: 16px 14px 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-.sponsor-card--gold {
-  border-color: var(--grey-300);
-  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 21, 61, 0.06));
+/* Pointer devices only: :hover sticks after a tap on touch screens. */
+@media (hover: hover) and (pointer: fine) {
+  .sponsor-tile:hover {
+    border-color: var(--navy-700);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 21, 61, 0.08));
+  }
 }
 
-.sponsor-card__logo {
-  height: 96px;
+.sponsor-tile:focus-visible {
+  outline: 3px solid var(--navy-700);
+  outline-offset: 2px;
+}
+
+.sponsor-tile__logo {
+  height: 88px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.sponsor-card--bronze .sponsor-card__logo {
+.sponsor-tile--bronze .sponsor-tile__logo {
   height: 64px;
 }
 
-.sponsor-card__logo img {
+.sponsor-tile__logo img {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
 }
 
-.sponsor-card__name {
-  font-size: 1.05rem;
+.sponsor-tile__fallback {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--navy-800);
+  line-height: 1.15;
+}
+
+.sponsor-tile__name {
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--navy-800);
+  overflow-wrap: break-word;
+}
+
+.sponsor-tile--bronze .sponsor-tile__name {
+  font-size: 0.85rem;
+}
+
+.sponsor-tile__more {
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--grey-500);
+}
+
+/* Dialog ---------------------------------------------------------------- */
+
+.detail-card {
+  width: 460px;
+  max-width: 94vw;
+}
+
+.detail-card__head {
+  background-color: #fff;
+  padding: 22px 20px 16px;
+  text-align: center;
+  border-bottom: 1px solid var(--grey-200);
+}
+
+.detail-card__logo {
+  height: 84px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.detail-card__logo img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.detail-card__name {
+  font-size: 1.25rem;
   margin: 0;
   overflow-wrap: break-word;
 }
 
-.sponsor-card--bronze .sponsor-card__name {
+.detail-card__blurb {
+  margin: 0 0 14px;
   font-size: 0.95rem;
-}
-
-.sponsor-card__blurb {
-  margin: 0;
-  font-size: 0.9rem;
-  line-height: 1.55;
+  line-height: 1.6;
   color: var(--grey-600);
   /* Sponsor-supplied copy, so it is rendered as text and never as markup. */
   white-space: pre-wrap;
 }
 
-.sponsor-card--bronze .sponsor-card__blurb {
-  font-size: 0.84rem;
-}
-
-.sponsor-card__links {
+.detail-card__links {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-top: auto;
-  padding-top: 4px;
+  gap: 12px;
 }
 
 .sponsor-link {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 0.84rem;
+  gap: 5px;
+  font-size: 0.9rem;
   color: var(--navy-800);
   text-decoration: none;
 }
