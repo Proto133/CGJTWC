@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Dialog, date, copyToClipboard, Notify } from 'quasar'
 import { useRegistrationsStore } from 'stores/registrations'
 import { registrationWrestlers, wrestlerNames, toUsDate } from 'src/utils/registration'
@@ -106,6 +106,61 @@ const collected = computed(() => store.registrations
   .filter((r) => r.payment?.status === 'paid')
   .reduce((sum, r) => sum + (r.payment?.amountReceived ?? 0), 0))
 
+// ---------------------------------------------------------------------------
+// Printable payment checklist
+// ---------------------------------------------------------------------------
+
+/**
+ * Sorted by guardian surname, not by when they signed up.
+ *
+ * The sheet is used at a meeting to look a family up while they are standing
+ * there, which is an alphabetical task. Submission order is useless for that.
+ */
+const printRows = computed(() =>
+  [...filtered.value].sort((a, b) => {
+    const byLast = (a.guardian?.lastName ?? '').localeCompare(b.guardian?.lastName ?? '')
+    if (byLast !== 0) return byLast
+    return (a.guardian?.firstName ?? '').localeCompare(b.guardian?.firstName ?? '')
+  }))
+
+/** Only what is actually outstanding on the printed rows. */
+const printOwed = computed(() => printRows.value
+  .filter((r) => r.payment && r.payment.status !== 'paid' && r.payment.status !== 'waived')
+  .reduce((sum, r) => sum + (r.payment?.amountDue ?? 0), 0))
+
+const printedOn = computed(() => date.formatDate(new Date(), 'MM-DD-YYYY'))
+
+/**
+ * Rendered only while printing, and teleported to the body.
+ *
+ * Teleporting is what makes the print stylesheet simple: the sheet becomes a
+ * direct child of body, so print CSS can hide every sibling rather than trying
+ * to unpick the dashboard's header, tabs and drawer one selector at a time.
+ */
+const printing = ref(false)
+
+async function printRoster() {
+  printing.value = true
+  document.body.classList.add('printing-roster')
+  // The node has to exist before the print dialog is opened.
+  await nextTick()
+  window.print()
+}
+
+function endPrint() {
+  printing.value = false
+  document.body.classList.remove('printing-roster')
+}
+
+// afterprint fires whether the dialog was confirmed or cancelled, which is the
+// only reliable signal that printing is over.
+onMounted(() => window.addEventListener('afterprint', endPrint))
+onBeforeUnmount(() => {
+  window.removeEventListener('afterprint', endPrint)
+  // Leaving the tab mid-print would otherwise strand the body class.
+  endPrint()
+})
+
 const counts = computed(() => ({
   all: store.registrations.length,
   new: store.registrations.filter((r) => r.status === 'new').length,
@@ -202,6 +257,24 @@ const namesOf = wrestlerNames
       <q-icon name="lock" size="16px" class="q-mr-xs" />
       These records contain a minor's date of birth and home address. They are
       readable by admins only. Consider deleting them once a wrestler is enrolled.
+    </div>
+
+    <!-- Above the loading branch, not inside it: dropping an element between a
+         v-if and its v-else-if severs the chain. -->
+    <div class="print-bar">
+      <q-btn
+        outline
+        dense
+        no-caps
+        icon="print"
+        label="Print checklist"
+        :disable="printRows.length === 0"
+        @click="printRoster"
+      />
+      <span class="print-bar__note">
+        Prints the {{ printRows.length }} shown above, A–Z by family name, with a
+        column to tick off payments.
+      </span>
     </div>
 
     <div v-if="store.loading" class="text-center q-pa-lg">
@@ -441,6 +514,56 @@ const namesOf = wrestlerNames
       </q-expansion-item>
     </q-list>
 
+    <!-- Teleported so the print stylesheet can hide everything that is not
+         this, rather than chasing the dashboard's chrome selector by selector. -->
+    <Teleport to="body">
+      <div v-if="printing" class="roster-print">
+        <header class="roster-print__head">
+          <h1>Payment checklist</h1>
+          <div class="roster-print__meta">
+            {{ printRows.length }} famil{{ printRows.length === 1 ? 'y' : 'ies' }}
+            · ${{ printOwed }} outstanding · printed {{ printedOn }}
+          </div>
+        </header>
+
+        <table class="roster-print__table">
+          <thead>
+            <tr>
+              <th class="col-tick">Paid</th>
+              <th>Family</th>
+              <th>Wrestlers</th>
+              <th>Reference</th>
+              <th class="col-num">Owed</th>
+              <th class="col-write">Received</th>
+              <th class="col-write">Method / notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="reg in printRows" :key="reg.id">
+              <td class="col-tick"><span class="tickbox"></span></td>
+              <td>
+                {{ reg.guardian?.lastName }}, {{ reg.guardian?.firstName }}
+                <div class="roster-print__sub">{{ reg.guardian?.phone }}</div>
+              </td>
+              <td>{{ wrestlerNames(reg) }}</td>
+              <td class="col-ref">{{ reg.payment?.reference }}</td>
+              <td class="col-num">
+                <template v-if="reg.payment?.status === 'paid'">paid</template>
+                <template v-else-if="reg.payment?.status === 'waived'">waived</template>
+                <template v-else>${{ reg.payment?.amountDue ?? 0 }}</template>
+              </td>
+              <td class="col-write"></td>
+              <td class="col-write"></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p class="roster-print__foot">
+          Total outstanding on this sheet: ${{ printOwed }}
+        </p>
+      </div>
+    </Teleport>
+
     <PaymentDialog
       v-model="paymentDialogOpen"
       :registration="editingPayment"
@@ -480,6 +603,112 @@ const namesOf = wrestlerNames
   border: 1px solid var(--grey-200);
   border-radius: 999px;
   overflow: hidden;
+}
+
+.print-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.print-bar__note {
+  font-size: 0.82rem;
+  color: var(--grey-500);
+}
+
+/*
+ * Never shown on screen, even while the print dialog is open, so the sheet
+ * does not flash into the dashboard on the way to the printer.
+ */
+.roster-print {
+  display: none;
+}
+
+@media print {
+  .roster-print {
+    display: block;
+    font-family: var(--font-body);
+    color: #000;
+  }
+
+  .roster-print__head h1 {
+    font-size: 16pt;
+    margin: 0;
+  }
+
+  .roster-print__meta {
+    font-size: 9pt;
+    color: #444;
+    margin-bottom: 10pt;
+  }
+
+  .roster-print__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9.5pt;
+  }
+
+  /* Repeats the header on every page of a long list. */
+  .roster-print__table thead {
+    display: table-header-group;
+  }
+
+  .roster-print__table th,
+  .roster-print__table td {
+    border: 1px solid #999;
+    padding: 5pt 6pt;
+    text-align: left;
+    vertical-align: top;
+    /* Keeps a family's row off a page boundary. */
+    page-break-inside: avoid;
+  }
+
+  .roster-print__table th {
+    font-size: 8.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: #eee;
+  }
+
+  .roster-print__sub {
+    font-size: 8pt;
+    color: #555;
+  }
+
+  .col-tick {
+    width: 34pt;
+    text-align: center;
+  }
+
+  .tickbox {
+    display: inline-block;
+    width: 11pt;
+    height: 11pt;
+    border: 1pt solid #333;
+  }
+
+  .col-ref {
+    font-family: monospace;
+    white-space: nowrap;
+  }
+
+  .col-num {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  /* Left blank on purpose — these are written in by hand at the meeting. */
+  .col-write {
+    width: 78pt;
+  }
+
+  .roster-print__foot {
+    margin-top: 10pt;
+    font-size: 10pt;
+    font-weight: 700;
+  }
 }
 
 .status-badge {
