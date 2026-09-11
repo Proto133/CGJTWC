@@ -295,6 +295,15 @@ export interface Sponsor {
   blurb: string
   logoUrl?: string
   websiteUrl?: string
+  /**
+   * The business's public line, as it would appear on their own website.
+   *
+   * Deliberately separate from SponsorPrivate.contactPhone, which is the
+   * person at the business the club deals with and is frequently a personal
+   * mobile. Publishing that one because it happened to be on file would expose
+   * a number given on the understanding it stayed internal.
+   */
+  phone?: string
   socials?: SponsorSocials
   /**
    * Drives card size on the public page.
@@ -325,6 +334,7 @@ export interface Sponsor {
 export interface SponsorPrivate {
   contactName?: string
   contactEmail?: string
+  /** Whoever the club deals with. Often a mobile; never published. */
   contactPhone?: string
   /** Whole dollars of cash actually received. Never published. */
   amount?: number

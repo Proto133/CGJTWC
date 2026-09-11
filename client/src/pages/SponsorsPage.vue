@@ -37,6 +37,17 @@ const withHeadings = computed(() => showTierHeadings(groups.value))
 const total = computed(() =>
   groups.value.reduce((sum, group) => sum + group.sponsors.length, 0))
 
+/**
+ * Displayed as typed, dialled as digits.
+ *
+ * The scheme is hardcoded rather than interpolated from input, and everything
+ * but digits and a leading plus is stripped, so no admin entry can turn this
+ * into some other kind of link.
+ */
+function telHref(phone: string): string {
+  return `tel:${phone.replace(/[^\d+]/g, '')}`
+}
+
 /** Material Icons carries no brand glyphs, so these are labelled links. */
 const SOCIAL_LABELS: Record<keyof SponsorSocials, string> = {
   facebook: 'Facebook',
@@ -108,6 +119,14 @@ useMeta(() => ({
                 >
                   <q-icon name="public" size="15px" />
                   Website
+                </a>
+                <a
+                  v-if="sponsor.phone"
+                  :href="telHref(sponsor.phone)"
+                  class="sponsor-link"
+                >
+                  <q-icon name="call" size="15px" />
+                  {{ sponsor.phone }}
                 </a>
                 <a
                   v-for="social in safeSocials(sponsor.socials)"

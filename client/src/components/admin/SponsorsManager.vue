@@ -32,6 +32,7 @@ interface FormState {
   blurb: string
   logoUrl: string
   websiteUrl: string
+  phone: string
   facebook: string
   instagram: string
   x: string
@@ -53,7 +54,7 @@ interface FormState {
 
 function blankForm(): FormState {
   return {
-    name: '', blurb: '', logoUrl: '', websiteUrl: '',
+    name: '', blurb: '', logoUrl: '', websiteUrl: '', phone: '',
     facebook: '', instagram: '', x: '', linkedin: '',
     tier: 'bronze', order: 0, active: true,
     contactName: '', contactEmail: '', contactPhone: '',
@@ -111,6 +112,7 @@ async function openEdit(sponsor: Sponsor) {
     blurb: sponsor.blurb ?? '',
     logoUrl: sponsor.logoUrl ?? '',
     websiteUrl: sponsor.websiteUrl ?? '',
+    phone: sponsor.phone ?? '',
     facebook: sponsor.socials?.facebook ?? '',
     instagram: sponsor.socials?.instagram ?? '',
     x: sponsor.socials?.x ?? '',
@@ -153,6 +155,7 @@ function buildPayload() {
       blurb: f.blurb.trim(),
       logoUrl: f.logoUrl.trim(),
       websiteUrl: f.websiteUrl.trim(),
+      phone: f.phone.trim(),
       socials: {
         facebook: f.facebook.trim(),
         instagram: f.instagram.trim(),
@@ -294,6 +297,12 @@ async function recalculate() {
             :error="badWebsite"
             error-message="Must start with http:// or https://"
           />
+          <q-input
+            v-model="form.phone"
+            label="Business phone"
+            outlined
+            hint="The company's public line. Shown on the sponsorship page."
+          />
           <div class="row q-col-gutter-sm">
             <div class="col-12 col-sm-6">
               <q-input v-model="form.facebook" label="Facebook" outlined dense />
@@ -342,7 +351,13 @@ async function recalculate() {
                 <q-input v-model="form.contactEmail" label="Contact email" outlined dense />
               </div>
               <div class="col-12 col-sm-4">
-                <q-input v-model="form.contactPhone" label="Contact phone" outlined dense />
+                <q-input
+                  v-model="form.contactPhone"
+                  label="Contact phone (internal)"
+                  outlined
+                  dense
+                  hint="Often a mobile. Never published — use Business phone above for that."
+                />
               </div>
             </div>
 
