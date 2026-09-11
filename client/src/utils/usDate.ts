@@ -49,3 +49,32 @@ export function parseUsDate(input: string | undefined | null): Date | null {
 
   return date
 }
+
+const STORED = /^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/
+
+/**
+ * "YYYY/MM/DD" (or with dashes) -> local midnight on that day, or null.
+ *
+ * The storage format used by registrations and by sponsor term dates. Built
+ * from parts for the same reason as parseUsDate: `new Date('2026-09-09')` is
+ * UTC midnight and comes back as the previous evening in Central time.
+ */
+export function parseStoredDate(input: string | undefined | null): Date | null {
+  const match = STORED.exec((input ?? '').trim())
+  if (!match) return null
+
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+
+  const date = new Date(year, month - 1, day)
+  if (
+    date.getFullYear() !== year
+    || date.getMonth() !== month - 1
+    || date.getDate() !== day
+  ) {
+    return null
+  }
+
+  return date
+}

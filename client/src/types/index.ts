@@ -334,6 +334,24 @@ export interface Sponsor {
   /** Extra labelled links, beyond the website and socials. */
   links?: SponsorLink[]
   /**
+   * A deal the business offers club families, e.g. "10% off any remodel".
+   *
+   * Set by the club on the business's instruction. The offer is theirs to
+   * honour, not the club's — the page says so.
+   */
+  offer?: string
+  /** Optional code or phrase a family mentions to claim it. */
+  offerCode?: string
+  /**
+   * YYYY/MM/DD. Once past, the offer stops rendering automatically.
+   *
+   * Unlike a lapsed sponsor, which stays up deliberately while a renewal is
+   * discussed, an expired offer must disappear on its own: the cost of getting
+   * it wrong is a family at a counter being refused a discount the club
+   * promised them.
+   */
+  offerExpires?: string
+  /**
    * Drives card size on the public page.
    *
    * Derived from a thirds split of effective value, but stored rather than

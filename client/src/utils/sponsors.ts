@@ -1,4 +1,5 @@
 import type { Sponsor, SponsorSocials, SponsorTier } from 'src/types'
+import { parseStoredDate } from 'src/utils/usDate'
 
 /**
  * Sponsor presentation rules.
@@ -145,6 +146,30 @@ export function showTierHeadings(groups: SponsorGroup[]): boolean {
 
 export function activeSponsors(sponsors: Sponsor[]): Sponsor[] {
   return sponsors.filter((s) => s.active)
+}
+
+/**
+ * Whether a sponsor's offer should be shown right now.
+ *
+ * An expired offer is hidden automatically, which is the opposite of how a
+ * lapsed sponsor is treated. A stale logo costs nothing while a renewal is
+ * being discussed; a stale discount costs a family being refused at a counter
+ * over something the club told them.
+ *
+ * An offer with no expiry runs until somebody removes it.
+ */
+export function hasLiveOffer(sponsor: Sponsor, now: Date = new Date()): boolean {
+  if (!sponsor.offer || sponsor.offer.trim() === '') return false
+  if (!sponsor.offerExpires || sponsor.offerExpires.trim() === '') return true
+
+  const expires = parseStoredDate(sponsor.offerExpires)
+  // An unparseable date is treated as no expiry rather than as expired: the
+  // sponsor agreed to the offer, and a typo should not silently withdraw it.
+  if (!expires) return true
+
+  // Compared at day granularity so an offer lasts the whole of its final day.
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  return expires >= today
 }
 
 // ---------------------------------------------------------------------------

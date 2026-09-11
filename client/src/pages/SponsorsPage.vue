@@ -7,6 +7,7 @@ import {
   activeSponsors,
   cardBackground,
   groupByTier,
+  hasLiveOffer,
   isSafeUrl,
   safeSocials,
   showTierHeadings,
@@ -71,6 +72,37 @@ const SOCIAL_LABELS: Record<keyof SponsorSocials, string> = {
   linkedin: 'LinkedIn',
 }
 
+/**
+ * The offer disclaimer, shown only when there is an offer to disclaim.
+ *
+ * Dismissal is remembered, and the key carries a version: changing the wording
+ * means bumping it, so people who dismissed the old text are shown the new one
+ * rather than never seeing it.
+ */
+const NOTICE_KEY = 'sponsor-offer-notice-v1'
+const noticeDismissed = ref(false)
+
+onMounted(() => {
+  try {
+    noticeDismissed.value = localStorage.getItem(NOTICE_KEY) === '1'
+  } catch {
+    // Private browsing can throw on access. Showing the notice is the safe
+    // failure here, so nothing else is needed.
+  }
+})
+
+function dismissNotice() {
+  noticeDismissed.value = true
+  try {
+    localStorage.setItem(NOTICE_KEY, '1')
+  } catch {
+    // Dismissal simply will not persist; the banner stays closed for this view.
+  }
+}
+
+const anyOffers = computed(() =>
+  activeSponsors(sponsorsStore.sponsors).some((s) => hasLiveOffer(s)))
+
 /** Extra links, re-filtered at render in case an older document predates the rule. */
 function extraLinks(sponsor: Sponsor) {
   return (sponsor.links ?? []).filter((l) => isSafeUrl(l.url))
@@ -92,6 +124,26 @@ useMeta(() => ({
           support our wrestlers.
         </p>
       </header>
+
+      <!-- Only appears when somebody actually has an offer, and stays dismissed
+           once closed. The same point is repeated beside each offer in the
+           dialog, so dismissing this does not leave a claim unqualified. -->
+      <q-banner
+        v-if="anyOffers && !noticeDismissed"
+        dense
+        rounded
+        class="offer-notice"
+      >
+        <template #avatar>
+          <q-icon name="info" color="primary" size="20px" />
+        </template>
+        Offers on this page are set and honoured by the business, not by the
+        club. They may change or be withdrawn at the business's discretion, and
+        the club is not responsible for whether one is applied.
+        <template #action>
+          <q-btn flat dense no-caps label="Got it" @click="dismissNotice" />
+        </template>
+      </q-banner>
 
       <div v-if="sponsorsStore.loading" class="text-center q-pa-xl">
         <q-spinner color="primary" size="lg" />
@@ -136,7 +188,11 @@ useMeta(() => ({
                    symbol with no wordmark, and a wall of unidentifiable marks
                    helps nobody. It also gives the tile a visible affordance. -->
               <div class="sponsor-tile__name">{{ sponsor.name }}</div>
-              <div class="sponsor-tile__more">Details</div>
+              <div v-if="hasLiveOffer(sponsor)" class="sponsor-tile__offer">
+                <q-icon name="local_offer" size="13px" />
+                Club offer
+              </div>
+              <div v-else class="sponsor-tile__more">Details</div>
             </button>
           </div>
         </section>
@@ -177,6 +233,23 @@ useMeta(() => ({
         </div>
 
         <q-card-section>
+          <div v-if="hasLiveOffer(selected)" class="detail-offer">
+            <div class="detail-offer__head">
+              <q-icon name="local_offer" size="16px" />
+              Offer for club families
+            </div>
+            <p class="detail-offer__text">{{ selected.offer }}</p>
+            <p v-if="selected.offerCode" class="detail-offer__code">
+              Mention <strong>{{ selected.offerCode }}</strong>
+            </p>
+            <!-- Repeated here rather than relying on the banner alone, which is
+                 dismissible: the qualification belongs next to the claim. -->
+            <p class="detail-offer__small">
+              Offered and honoured by {{ selected.name }}, not by the club, and
+              subject to change at their discretion.
+            </p>
+          </div>
+
           <p v-if="selected.blurb" class="detail-card__blurb">{{ selected.blurb }}</p>
 
           <div class="detail-card__links">
@@ -333,6 +406,75 @@ useMeta(() => ({
   font-size: 0.74rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  color: var(--grey-500);
+}
+
+/* Replaces the "Details" line rather than joining it, so the tile keeps a
+   single call to action instead of two competing ones. */
+.sponsor-tile__offer {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  align-self: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--navy-800);
+  background: var(--grey-100);
+  border: 1px solid var(--grey-300);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+.offer-notice {
+  margin-bottom: 18px;
+  background: var(--grey-050);
+  border: 1px solid var(--grey-200);
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--grey-600);
+}
+
+.detail-offer {
+  border: 1px solid var(--grey-300);
+  border-left: 4px solid var(--navy-800);
+  border-radius: var(--radius-sm);
+  background: var(--grey-050);
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+
+.detail-offer__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--navy-800);
+}
+
+.detail-offer__text {
+  margin: 6px 0 0;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--grey-900);
+  white-space: pre-wrap;
+}
+
+.detail-offer__code {
+  margin: 6px 0 0;
+  font-size: 0.9rem;
+  color: var(--navy-800);
+}
+
+.detail-offer__small {
+  margin: 8px 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
   color: var(--grey-500);
 }
 

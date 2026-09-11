@@ -14,7 +14,7 @@ import {
   unrankedSponsors,
   type SplitInput,
 } from 'src/utils/sponsors'
-import { parseUsDate } from 'src/utils/usDate'
+import { parseStoredDate } from 'src/utils/usDate'
 import type { Sponsor, SponsorLink, SponsorPrivate, SponsorTier } from 'src/types'
 
 /**
@@ -43,6 +43,9 @@ interface FormState {
   x: string
   linkedin: string
   links: SponsorLink[]
+  offer: string
+  offerCode: string
+  offerExpires: string
   tier: SponsorTier
   order: number
   active: boolean
@@ -65,6 +68,7 @@ function blankForm(): FormState {
     websiteUrl: '', phone: '',
     facebook: '', instagram: '', x: '', linkedin: '',
     links: [],
+    offer: '', offerCode: '', offerExpires: '',
     tier: 'bronze', order: 0, active: true,
     contactName: '', contactEmail: '', contactPhone: '',
     amount: null, inKindValue: null, tierLocked: false,
@@ -97,11 +101,15 @@ const splitInputs = computed<SplitInput[]>(() =>
 
 const unranked = computed(() => unrankedSponsors(splitInputs.value))
 
-/** A term that has run out. Never auto-hides; the switch stays manual. */
+/**
+ * A term that has run out. Never auto-hides; the switch stays manual.
+ *
+ * Parsed with parseStoredDate because term dates are YYYY/MM/DD. This
+ * previously ran them through the MM-DD-YYYY parser, which never matched, so
+ * the badge could not appear at all.
+ */
 function termExpired(id: string): boolean {
-  const end = detailOf(id).termEnd
-  if (!end) return false
-  const parsed = parseUsDate(end.replace(/\//g, '-'))
+  const parsed = parseStoredDate(detailOf(id).termEnd)
   return parsed !== null && parsed < new Date()
 }
 
@@ -132,6 +140,9 @@ async function openEdit(sponsor: Sponsor) {
     // Copied rather than referenced, so cancelling an edit does not leave the
     // store's copy mutated.
     links: (sponsor.links ?? []).map((l) => ({ ...l })),
+    offer: sponsor.offer ?? '',
+    offerCode: sponsor.offerCode ?? '',
+    offerExpires: sponsor.offerExpires ?? '',
     tier: sponsor.tier,
     order: sponsor.order,
     active: sponsor.active,
@@ -315,6 +326,12 @@ const previewBackground = computed(() =>
     brandColorEnd: form.value.brandColorEnd,
   }) ?? 'none')
 
+/** Rejected here as well as in the rules, so the error names the field. */
+const offerExpiryInvalid = computed(() => {
+  const value = form.value.offerExpires.trim()
+  return value !== '' && parseStoredDate(value) === null
+})
+
 const badLogo = computed(() => urlInvalid('logoUrl'))
 const badWebsite = computed(() => urlInvalid('websiteUrl'))
 const badSocials = computed(() => socialFields.some((f) => urlInvalid(f.key)))
@@ -323,6 +340,7 @@ const canSave = computed(() =>
   form.value.name.trim() !== ''
   && !badLogo.value
   && !badColors.value
+  && !offerExpiryInvalid.value
   && !badWebsite.value
   && !badSocials.value
   && !badLinks.value)
@@ -349,6 +367,9 @@ function buildPayload() {
       links: f.links
         .filter((l) => l.label.trim() !== '' && l.url.trim() !== '')
         .map((l) => ({ label: l.label.trim(), url: l.url.trim() })),
+      offer: f.offer.trim(),
+      offerCode: f.offerCode.trim(),
+      offerExpires: f.offerExpires.trim(),
       tier: f.tier,
       order: f.order,
       active: f.active,
@@ -660,6 +681,51 @@ async function recalculate() {
               label="Add link"
               @click="addLink"
             />
+          </div>
+
+          <div>
+            <div class="block-label q-mb-xs">Offer for club families</div>
+            <div class="social-note q-mb-sm">
+              Optional. Shows as a badge on the sponsor's tile and in full when
+              it is opened. Leave blank and nothing appears. Set only what the
+              business has actually agreed to — the page states that the offer
+              is theirs to honour, not the club's.
+            </div>
+            <q-input
+              v-model="form.offer"
+              type="textarea"
+              label="The offer"
+              placeholder="10% off any bathroom remodel for Trojans families"
+              outlined
+              dense
+              autogrow
+              maxlength="300"
+              class="q-mb-sm"
+            />
+            <div class="row q-col-gutter-sm">
+              <div class="col-12 col-sm-6">
+                <q-input
+                  v-model="form.offerCode"
+                  label="Code to mention (optional)"
+                  placeholder="TROJANS10"
+                  outlined
+                  dense
+                  maxlength="40"
+                />
+              </div>
+              <div class="col-12 col-sm-6">
+                <q-input
+                  v-model="form.offerExpires"
+                  label="Expires (optional)"
+                  placeholder="YYYY/MM/DD"
+                  outlined
+                  dense
+                  :error="offerExpiryInvalid"
+                  error-message="Use YYYY/MM/DD"
+                  hint="Hidden automatically once past. Blank means it runs until removed."
+                />
+              </div>
+            </div>
           </div>
 
           <div class="row q-col-gutter-sm items-center">
