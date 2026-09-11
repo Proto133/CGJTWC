@@ -31,6 +31,7 @@ const allLinks = [
   { label: 'Staff', to: '/staff', icon: 'groups' },
   { label: 'Schedule', to: '/schedule', icon: 'event' },
   { label: 'Announcements', to: '/announcements', icon: 'campaign' },
+  { label: 'Sponsors', to: '/sponsors', icon: 'storefront' },
   { label: 'FAQ', to: '/faq', icon: 'help_outline' },
   { label: 'Resources', to: '/links', icon: 'link' },
   { label: 'Contact', to: '/contact', icon: 'mail' },

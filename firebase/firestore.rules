@@ -25,6 +25,29 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Sponsors are split across two documents because these rules grant access
+    // per document and never per field. The parent holds only what the public
+    // sponsorship page draws; the contact details and donation figures live in
+    // a subcollection nobody but an admin can touch.
+    //
+    // Parent rules do not cascade into subcollections, and a query on
+    // /sponsors never returns subcollection documents, so the commercial record
+    // is unreachable from the public page even though the sponsor itself is
+    // world-readable.
+    match /sponsors/{sponsorId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidSponsor();
+      allow delete: if isAdmin();
+
+      // Deliberately NOT matched by a recursive wildcard elsewhere in this
+      // file: keeping the path explicit means a collection group query on
+      // 'private' matches no rule and is refused, for admins as well. The app
+      // reads these documents one at a time for that reason.
+      match /private/{docId} {
+        allow read, write: if isAdmin();
+      }
+    }
+
     // Live overrides for the values in src/config/organization.ts. Public
     // because it is public site content; the file remains the fallback.
     match /settings/{docId} {
@@ -320,6 +343,44 @@ service cloud.firestore {
              && (!('phone' in d.keys()) || (d.phone is string && d.phone.size() <= 30))
              // Blocks backdating; serverTimestamp() resolves to request.time.
              && d.createdAt == request.time;
+    }
+
+    // The public half of a sponsor. Every field here is world-readable, so the
+    // whitelist is what stops an admin mistake putting a phone number or a
+    // donation figure on the public page: a key that is not listed rejects the
+    // whole write.
+    function isValidSponsor() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['name', 'blurb', 'logoUrl', 'websiteUrl', 'socials',
+                               'tier', 'order', 'active', 'createdAt', 'updatedAt'])
+             && d.keys().hasAll(['name', 'tier', 'order', 'active'])
+             && d.name is string && d.name.size() > 0 && d.name.size() <= 120
+             && d.tier in ['gold', 'silver', 'bronze']
+             && d.order is int && d.order >= 0 && d.order <= 999
+             && d.active is bool
+             && (!('blurb' in d.keys()) || (d.blurb is string && d.blurb.size() <= 1200))
+             && (!('logoUrl' in d.keys()) || isWebUrl(d.logoUrl))
+             && (!('websiteUrl' in d.keys()) || isWebUrl(d.websiteUrl))
+             && (!('socials' in d.keys()) || isValidSocials(d.socials));
+    }
+
+    function isValidSocials(s) {
+      return s is map
+             && s.keys().hasOnly(['facebook', 'instagram', 'x', 'linkedin'])
+             && (!('facebook' in s.keys()) || isWebUrl(s.facebook))
+             && (!('instagram' in s.keys()) || isWebUrl(s.instagram))
+             && (!('x' in s.keys()) || isWebUrl(s.x))
+             && (!('linkedin' in s.keys()) || isWebUrl(s.linkedin));
+    }
+
+    // http(s) only. These end up in an href or an img src, so a javascript: or
+    // data: URL would execute in a visitor's browser. The client filters too;
+    // this is the copy that holds if an admin account is compromised. Empty is
+    // allowed because clearing a field has to write something.
+    function isWebUrl(value) {
+      return value is string
+             && value.size() <= 500
+             && (value == '' || value.matches('^https?://.*'));
     }
 
     function isValidStaff() {

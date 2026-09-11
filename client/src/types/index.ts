@@ -257,6 +257,111 @@ export interface StaffFormPayload {
 }
 
 // ---------------------------------------------------------------------------
+// Sponsors
+// ---------------------------------------------------------------------------
+//
+// A sponsor is stored across two documents because security rules grant access
+// per document, never per field:
+//
+//   sponsors/{id}                  public read  -> Sponsor
+//   sponsors/{id}/private/details  admin only   -> SponsorPrivate
+//
+// Parent rules do not cascade into subcollections, and a query on `sponsors`
+// never returns subcollection documents, so the commercial record stays out of
+// reach of the public page and of anyone reading the network traffic.
+
+export type SponsorTier = 'gold' | 'silver' | 'bronze'
+
+/** Optional business socials. A fixed set so rules can check each one. */
+export interface SponsorSocials {
+  facebook?: string
+  instagram?: string
+  x?: string
+  linkedin?: string
+}
+
+/**
+ * The public half of a sponsor record.
+ *
+ * IMPORTANT: every field here is world-readable. Do not add contact details,
+ * donation amounts or contract terms to this interface — they belong in
+ * SponsorPrivate. Anything added here is published the moment it is written,
+ * whether or not the page renders it.
+ */
+export interface Sponsor {
+  id: string
+  name: string
+  /** Copy supplied by the business for its card. Plain text, never HTML. */
+  blurb: string
+  logoUrl?: string
+  websiteUrl?: string
+  socials?: SponsorSocials
+  /**
+   * Drives card size on the public page.
+   *
+   * Derived from a thirds split of effective value, but stored rather than
+   * computed at render time — the input is the donation figure, which is
+   * private, so the public page has no way to work it out. Recomputed inside
+   * the same batch as any mutation; see src/utils/sponsors.ts.
+   */
+  tier: SponsorTier
+  /** Lower numbers sort first within a tier. */
+  order: number
+  /**
+   * Manual switch rather than an expiry check on the term dates. A lapsed
+   * sponsor mid-renewal should not vanish from the page while the conversation
+   * is still going; the dashboard nudges instead.
+   */
+  active: boolean
+  createdAt?: Timestamp
+  updatedAt?: Timestamp
+}
+
+/**
+ * The commercial half, at sponsors/{id}/private/details.
+ *
+ * Admin read and write only. Never fetched by the public page.
+ */
+export interface SponsorPrivate {
+  contactName?: string
+  contactEmail?: string
+  contactPhone?: string
+  /** Whole dollars of cash actually received. Never published. */
+  amount?: number
+  /**
+   * Whole dollars, the estimated worth of donated goods or services.
+   *
+   * Added to `amount` rather than applied as a multiplier. A multiplier would
+   * scale the extras with the cash, so the same donated shoes would be worth
+   * five times as much from a $5,000 sponsor as from a $1,000 one. Keeping
+   * these separate also leaves `amount` a clean record of money received.
+   */
+  inKindValue?: number
+  /**
+   * Keeps this sponsor's tier out of the automatic split.
+   *
+   * The escape hatch for what money cannot express: an in-kind-only partner
+   * who would otherwise fall to Bronze for having no cash figure, or a
+   * placement that has actually been promised to somebody and must survive the
+   * next recompute.
+   *
+   * Private because it is an internal decision that is never rendered — the
+   * public document holds only what the page draws.
+   */
+  tierLocked?: boolean
+  /** YYYY/MM/DD, matching the convention used by registrations. */
+  termStart?: string
+  termEnd?: string
+  notes?: string
+  updatedAt?: Timestamp
+}
+
+export interface SponsorFormPayload {
+  public: Omit<Sponsor, 'id' | 'createdAt' | 'updatedAt'>
+  private: SponsorPrivate
+}
+
+// ---------------------------------------------------------------------------
 // Wrestler registrations
 // ---------------------------------------------------------------------------
 

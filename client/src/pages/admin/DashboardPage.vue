@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useEventsStore } from 'stores/events'
+import { useSponsorsStore } from 'stores/sponsors'
 import { useAnnouncementsStore } from 'stores/announcements'
 import { useStaffStore } from 'stores/staff'
 import { useRegistrationsStore } from 'stores/registrations'
@@ -11,6 +12,7 @@ import { useXMentionsStore } from 'stores/xMentions'
 import { useContactMessagesStore } from 'stores/contactMessages'
 import { useAuthStore } from 'stores/auth'
 import EventsManager from 'components/admin/EventsManager.vue'
+import SponsorsManager from 'components/admin/SponsorsManager.vue'
 import AnnouncementForm from 'components/admin/AnnouncementForm.vue'
 import StaffForm from 'components/admin/StaffForm.vue'
 import SettingsForm from 'components/admin/SettingsForm.vue'
@@ -31,6 +33,7 @@ import { Dialog } from 'quasar'
 type Tab =
   | 'events'
   | 'announcements'
+  | 'sponsors'
   | 'staff'
   | 'registrations'
   | 'messages'
@@ -43,6 +46,7 @@ type Tab =
 const tab = ref<Tab>('events')
 
 const eventsStore = useEventsStore()
+const sponsorsStore = useSponsorsStore()
 const announcementsStore = useAnnouncementsStore()
 const staffStore = useStaffStore()
 const registrationsStore = useRegistrationsStore()
@@ -61,6 +65,7 @@ const editingStaff = ref<Partial<StaffMember> | null>(null)
 
 onMounted(() => {
   eventsStore.subscribe()
+  sponsorsStore.subscribe()
   announcementsStore.subscribe()
   staffStore.subscribe()
   // Admin-only: rules deny these reads to everyone else.
@@ -76,6 +81,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   eventsStore.unsubscribeFromEvents()
+  // Also drops the cached contact details and donation figures.
+  sponsorsStore.unsubscribeFromSponsors()
   announcementsStore.unsubscribeFromAnnouncements()
   staffStore.unsubscribeFromStaff()
   registrationsStore.unsubscribeFromRegistrations()
@@ -180,6 +187,7 @@ function confirmDeleteStaff(member: StaffMember) {
       mobile-arrows
     >
       <q-tab name="events" label="Events" icon="event" />
+      <q-tab name="sponsors" label="Sponsors" icon="storefront" />
       <q-tab name="announcements" label="Announcements" icon="campaign" />
       <q-tab name="staff" label="Staff" icon="groups" />
       <q-tab name="registrations" icon="how_to_reg">
@@ -251,6 +259,11 @@ function confirmDeleteStaff(member: StaffMember) {
       <!-- EVENTS -->
       <q-tab-panel name="events" class="q-px-none">
         <EventsManager />
+      </q-tab-panel>
+
+      <!-- SPONSORS -->
+      <q-tab-panel name="sponsors" class="q-px-none">
+        <SponsorsManager />
       </q-tab-panel>
 
       <!-- ANNOUNCEMENTS -->
