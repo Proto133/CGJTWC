@@ -42,6 +42,14 @@ const routes: RouteRecordRaw[] = [
         component: () => import('pages/admin/DashboardPage.vue'),
         meta: { requiresAuth: true },
       },
+      {
+        // Its own route rather than a dashboard tab: this is used one-handed at
+        // a mat, and shares nothing with the content-management screens.
+        path: 'score',
+        name: 'admin-score',
+        component: () => import('pages/admin/ScorePage.vue'),
+        meta: { requiresAuth: true },
+      },
     ],
   },
 

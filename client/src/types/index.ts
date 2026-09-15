@@ -608,6 +608,63 @@ export interface RegistrationFormPayload {
 }
 
 // ---------------------------------------------------------------------------
+// Roster
+// ---------------------------------------------------------------------------
+//
+//   wrestlers/{id}                  what a bio card may show
+//   wrestlers/{id}/private/details  date of birth, guardian contact, USAW number
+//
+// Split because rules grant access per document and never per field, and bio
+// cards are planned. A date of birth in the public document is published the
+// moment it is written, whatever the page chooses to render.
+
+/** IKWF places a wrestler by their age on 31 December of the season. */
+export type IkwfDivision = 'tot' | 'bantam' | 'intermediate' | 'novice' | 'senior'
+
+export interface Wrestler {
+  id: string
+  firstName: string
+  lastName: string
+  /**
+   * Derived from the date of birth and the season, never hand-maintained.
+   * Public even though the date of birth is not: an age band is not a birthday.
+   */
+  division?: IkwfDivision
+  weightClass?: string
+  /** e.g. '2026-27'. The season this record was last enrolled for. */
+  season?: string
+  /** On the roster this season. Distinct from `published`. */
+  active: boolean
+  /**
+   * Whether this wrestler may appear on the public site.
+   *
+   * A family asking to be left off flips this, which removes the bio card while
+   * leaving the roster entry, stats and history untouched. Without it the only
+   * way to honour the request would be deleting a season of results.
+   */
+  published: boolean
+  createdAt?: Timestamp
+  updatedAt?: Timestamp
+}
+
+/** Admin-only half. Never fetched by a public page. */
+export interface WrestlerPrivate {
+  /** YYYY/MM/DD, matching the registration convention. */
+  dob?: string
+  grade?: string
+  usawNumber?: string
+  guardianName?: string
+  guardianEmail?: string
+  guardianPhone?: string
+  emergencyName?: string
+  emergencyPhone?: string
+  notes?: string
+  /** Provenance only. Registrations are meant to be deleted, so nothing reads through it. */
+  sourceRegistrationId?: string
+  updatedAt?: Timestamp
+}
+
+// ---------------------------------------------------------------------------
 // Match results
 // ---------------------------------------------------------------------------
 //

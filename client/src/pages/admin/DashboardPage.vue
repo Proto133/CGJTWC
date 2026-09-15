@@ -23,6 +23,7 @@ import AccountsVault from 'components/admin/AccountsVault.vue'
 import MentionsQueue from 'components/admin/MentionsQueue.vue'
 import MessagesInbox from 'components/admin/MessagesInbox.vue'
 import AdminThreads from 'components/admin/AdminThreads.vue'
+import RosterManager from 'components/admin/RosterManager.vue'
 import type {
   Announcement,
   StaffMember,
@@ -35,6 +36,7 @@ type Tab =
   | 'events'
   | 'announcements'
   | 'sponsors'
+  | 'roster'
   | 'staff'
   | 'registrations'
   | 'messages'
@@ -191,6 +193,7 @@ function confirmDeleteStaff(member: StaffMember) {
       <q-tab name="events" label="Events" icon="event" />
       <q-tab name="sponsors" label="Sponsors" icon="storefront" />
       <q-tab name="announcements" label="Announcements" icon="campaign" />
+      <q-tab name="roster" label="Roster" icon="sports_martial_arts" />
       <q-tab name="staff" label="Staff" icon="groups" />
       <q-tab name="registrations" icon="how_to_reg">
         <span class="q-ml-sm">Registrations</span>
@@ -267,6 +270,11 @@ function confirmDeleteStaff(member: StaffMember) {
       <!-- SPONSORS -->
       <q-tab-panel name="sponsors" class="q-px-none">
         <SponsorsManager />
+      </q-tab-panel>
+
+      <!-- ROSTER -->
+      <q-tab-panel name="roster" class="q-px-none">
+        <RosterManager />
       </q-tab-panel>
 
       <!-- ANNOUNCEMENTS -->

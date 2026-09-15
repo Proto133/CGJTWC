@@ -128,6 +128,32 @@ service cloud.firestore {
       }
     }
 
+    // ============ ROSTER ============
+    // Split the same way as sponsors: the parent holds what a bio card may show,
+    // the subcollection holds a minor's date of birth and guardian contact.
+    // Public reads are allowed on the parent only, and only for a wrestler an
+    // admin has explicitly published — an unpublished one is invisible outside
+    // the dashboard, which is how a family's request to be left off is honoured
+    // without deleting their season.
+    match /wrestlers/{wrestlerId} {
+      allow read: if resource.data.published == true || isAdmin();
+      allow create, update: if isAdmin() && isValidWrestler();
+      allow delete: if isAdmin();
+
+      match /private/{docId} {
+        allow read, write: if isAdmin();
+      }
+    }
+
+    // ============ MATCH RESULTS ============
+    // Admin-only for now. Becomes publicly readable alongside bio cards, at
+    // which point the rule mirrors the wrestler's own published flag.
+    match /matches/{matchId} {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin() && isValidMatch();
+      allow delete: if isAdmin();
+    }
+
     // ============ ADMIN DISCUSSION THREADS ============
     // Wholly internal, and likely to mention families by name while sorting
     // something out, so there is no public access at any level.
@@ -493,6 +519,61 @@ service cloud.firestore {
              && d.authorUid == request.auth.uid
              && d.authorEmail is string && d.authorEmail.size() <= 120
              && d.createdAt == request.time;
+    }
+
+    // Public half of a wrestler. Every field here is world-readable once
+    // published, so the whitelist is what keeps a date of birth or a guardian's
+    // number from reaching it: an unlisted key rejects the whole write.
+    function isValidWrestler() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['firstName', 'lastName', 'division', 'weightClass',
+                               'season', 'active', 'published',
+                               'createdAt', 'updatedAt'])
+             && d.keys().hasAll(['firstName', 'lastName', 'active', 'published'])
+             && d.firstName is string && d.firstName.size() > 0 && d.firstName.size() <= 60
+             && d.lastName is string && d.lastName.size() > 0 && d.lastName.size() <= 60
+             && d.active is bool
+             && d.published is bool
+             && (!('division' in d.keys())
+                 || d.division in ['tot', 'bantam', 'intermediate', 'novice', 'senior'])
+             && (!('weightClass' in d.keys())
+                 || (d.weightClass is string && d.weightClass.size() <= 20))
+             && (!('season' in d.keys()) || (d.season is string && d.season.size() <= 20));
+    }
+
+    // A bout. The event log is not validated call by call — rules cannot loop —
+    // so it is bounded by size and the client owns its shape. The fields that
+    // decide a record are checked properly.
+    function isValidMatch() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['wrestlerId', 'season', 'eventId', 'eventName', 'date',
+                               'opponentName', 'opponentTeam', 'weightClass', 'round',
+                               'result', 'winType', 'officialFor', 'officialAgainst',
+                               'events', 'counts', 'createdAt', 'updatedAt', 'createdByUid'])
+             && d.keys().hasAll(['wrestlerId', 'season', 'date', 'result', 'winType'])
+             && d.wrestlerId is string && d.wrestlerId.size() > 0
+             && d.season is string && d.season.size() <= 20
+             && d.date is timestamp
+             && d.result in ['win', 'loss']
+             && d.winType in ['decision', 'majorDecision', 'techFall', 'fall',
+                              'forfeit', 'injuryDefault', 'disqualification', 'bye']
+             && (!('officialFor' in d.keys()) || isBoutScore(d.officialFor))
+             && (!('officialAgainst' in d.keys()) || isBoutScore(d.officialAgainst))
+             && (!('events' in d.keys()) || (d.events is list && d.events.size() <= 200))
+             && (!('counts' in d.keys()) || d.counts is map)
+             && (!('eventName' in d.keys())
+                 || (d.eventName is string && d.eventName.size() <= 140))
+             && (!('opponentName' in d.keys())
+                 || (d.opponentName is string && d.opponentName.size() <= 120))
+             && (!('opponentTeam' in d.keys())
+                 || (d.opponentTeam is string && d.opponentTeam.size() <= 120))
+             && (!('round' in d.keys()) || (d.round is string && d.round.size() <= 60));
+    }
+
+    // Generous upper bound rather than a real limit: a tech fall ends at 15, but
+    // a runaway bout can legitimately pass it before the call is made.
+    function isBoutScore(value) {
+      return value is int && value >= 0 && value <= 200;
     }
 
     function isValidStaff() {
