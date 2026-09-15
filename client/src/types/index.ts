@@ -608,6 +608,131 @@ export interface RegistrationFormPayload {
 }
 
 // ---------------------------------------------------------------------------
+// Match results
+// ---------------------------------------------------------------------------
+//
+// A bout is stored as an ordered log of the calls made, not as a set of totals.
+// Counts and the score are both derived from it — see src/utils/matchScoring.ts.
+//
+// The log is what makes live scoring workable: a mis-tap has to be removable,
+// which a counter cannot offer. Bouts entered by hand from a bracket afterwards
+// carry `counts` and no log instead, and every consumer reads through one
+// accessor that takes whichever is present.
+
+/**
+ * A single call, in the order it was made.
+ *
+ * `side` names the wrestler the call was made ON, which for a scoring move is
+ * the wrestler who scored and for an infraction is the offender. That is how
+ * the official calls it — "stalling, red" — and therefore what a scorer hears
+ * and taps under pressure. Working out who actually gains the point is the
+ * derivation's job, not the scorer's.
+ */
+export type MatchEventType =
+  | 'takedown'
+  | 'escape'
+  | 'reversal'
+  /** Near fall values are in the name, so a rules change cannot misread history. */
+  | 'nearFall2'
+  | 'nearFall3'
+  | 'nearFall4'
+  | 'penalty1'
+  | 'penalty2'
+  /** Recorded but scores nothing. It is the sequence that matters. */
+  | 'stallWarning'
+  | 'stallPoint'
+
+export interface MatchEvent {
+  type: MatchEventType
+  /** Who the call was made on. See the note above: offender for infractions. */
+  side: 'wrestler' | 'opponent'
+  /** 1, 2 or 3; overtime periods continue the sequence. */
+  period: number
+}
+
+/**
+ * Totals for a bout entered by hand, where no log exists.
+ *
+ * Mirrors the event types. Anything derived from a log produces this same
+ * shape, so consumers never care which way a bout was captured.
+ */
+export interface MatchCounts {
+  takedowns: number
+  escapes: number
+  reversals: number
+  nearFall2: number
+  nearFall3: number
+  nearFall4: number
+  penalties: number
+  stalls: number
+}
+
+export type MatchWinType =
+  | 'decision'
+  | 'majorDecision'
+  | 'techFall'
+  | 'fall'
+  | 'forfeit'
+  | 'injuryDefault'
+  | 'disqualification'
+  | 'bye'
+
+export type MatchResult = 'win' | 'loss'
+
+export interface Match {
+  id: string
+  wrestlerId: string
+  /** e.g. '2026-27'. Every query is season-scoped. */
+  season: string
+
+  /**
+   * The club event this bout belongs to, where there is one.
+   *
+   * Optional because a wrestler may compete at something that was never on the
+   * club calendar, and forcing a fake event just to record a bout would be
+   * worse than a free-text label.
+   */
+  eventId?: string
+  /**
+   * Event name and date copied at write time.
+   *
+   * Events can be deleted, including in bulk from the events tab. A match
+   * holding only an eventId would lose its label entirely when that happens,
+   * so the label is snapshotted rather than looked up.
+   */
+  eventName?: string
+  date: Timestamp
+
+  opponentName?: string
+  opponentTeam?: string
+  weightClass?: string
+  /** Free text: "Championship quarterfinal", "Round 3". */
+  round?: string
+
+  result: MatchResult
+  winType: MatchWinType
+
+  /**
+   * The score as the table recorded it, which is authoritative.
+   *
+   * Kept separate from anything derived: a live tally is a best-effort second
+   * screen, and where the two disagree the official result stands while the
+   * breakdown is treated as suspect.
+   */
+  officialFor?: number
+  officialAgainst?: number
+
+  /** Present when scored live. Takes precedence over `counts`. */
+  events?: MatchEvent[]
+  /** Present when entered by hand from a bracket. */
+  counts?: MatchCounts
+
+  createdAt?: Timestamp
+  updatedAt?: Timestamp
+  createdByUid?: string
+}
+
+// ---------------------------------------------------------------------------
 // Photo gallery (designed, not yet wired — blocked on Cloud Storage)
 // ---------------------------------------------------------------------------
 
