@@ -4,12 +4,8 @@ import { date as qdate } from 'quasar'
 import { useMatchesStore } from 'stores/matches'
 import MatchEditDialog from 'components/admin/MatchEditDialog.vue'
 import { reconcile } from 'src/utils/matchScoring'
-import {
-  nearFallTotal,
-  recordLabel,
-  resultLabel,
-  summarise,
-} from 'src/utils/wrestlerStats'
+import { nearFallTotal, recordLabel, summarise } from 'src/utils/wrestlerStats'
+import { resultLabel } from 'src/utils/matchLabels'
 import type { Match, Wrestler } from 'src/types'
 
 const props = defineProps<{

@@ -710,6 +710,15 @@ export type MatchEventType =
   | 'stallPoint2'
   /** Fifth. Ends the bout by disqualification and scores nothing itself. */
   | 'stallDq'
+  /*
+   * False start or incorrect starting position (8-1-3), a third counter again
+   * independent of the two above: two cautions are free, then every subsequent
+   * one is a point. No disqualification rung.
+   */
+  /** First and second. Recorded, scores nothing. */
+  | 'caution'
+  /** Third onwards. */
+  | 'cautionPoint'
 
 export interface MatchEvent {
   type: MatchEventType
@@ -734,6 +743,8 @@ export interface MatchCounts {
   nearFall4: number
   penalties: number
   stalls: number
+  /** False starts and incorrect starting positions. */
+  cautions: number
 }
 
 export type MatchWinType =

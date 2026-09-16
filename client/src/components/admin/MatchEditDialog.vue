@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { Dialog, date as qdate } from 'quasar'
 import { useMatchesStore } from 'stores/matches'
 import { emptyCounts, reconcile, scoreFromCounts, scoreFromEvents } from 'src/utils/matchScoring'
-import { WIN_TYPE_OPTIONS } from 'src/utils/wrestlerStats'
+import { WIN_TYPE_OPTIONS } from 'src/utils/matchLabels'
 import type { Match, MatchCounts, MatchResult, MatchWinType } from 'src/types'
 
 /**
@@ -77,6 +77,7 @@ const COUNT_FIELDS: { key: keyof MatchCounts; label: string }[] = [
   { key: 'nearFall4', label: 'Near fall 4' },
   { key: 'penalties', label: 'Penalties' },
   { key: 'stalls', label: 'Stalls' },
+  { key: 'cautions', label: 'Cautions' },
 ]
 
 const anyCounts = computed(() => COUNT_FIELDS.some((f) => (form.value.counts[f.key] ?? 0) > 0))
@@ -258,8 +259,8 @@ function confirmDelete() {
 
         <template v-else>
           <p class="detail-help">
-            Counts for our wrestler. Penalties and stalls are the ones called
-            <em>on</em> them, which is why they do not add to the total below.
+            Counts for our wrestler. Penalties, stalls and cautions are the ones
+            called <em>on</em> them, which is why they do not add to the total below.
           </p>
           <div class="count-grid">
             <q-input

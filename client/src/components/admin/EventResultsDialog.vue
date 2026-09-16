@@ -3,7 +3,8 @@ import { computed, ref } from 'vue'
 import { useMatchesStore } from 'stores/matches'
 import { useWrestlersStore } from 'stores/wrestlers'
 import MatchEditDialog from 'components/admin/MatchEditDialog.vue'
-import { eventTeamPoints, resultLabel } from 'src/utils/wrestlerStats'
+import { eventTeamPoints } from 'src/utils/wrestlerStats'
+import { resultLabel } from 'src/utils/matchLabels'
 import type { Event, Match } from 'src/types'
 
 /**

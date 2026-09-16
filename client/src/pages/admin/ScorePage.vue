@@ -6,14 +6,21 @@ import { useMatchesStore } from 'stores/matches'
 import { useEventsStore } from 'stores/events'
 import {
   STALL_DQ_AT,
+  cautionConsequence,
+  cautionConsequenceShort,
+  cautionCount,
+  isInfraction,
+  nextCautionCall,
   nextStallCall,
   scoreFromEvents,
   stallConsequence,
+  stallConsequenceShort,
   stallCount,
   suggestWinType,
   undoLast,
 } from 'src/utils/matchScoring'
-import { WIN_TYPE_OPTIONS } from 'src/utils/wrestlerStats'
+import { WIN_TYPE_OPTIONS, eventLabel, eventName } from 'src/utils/matchLabels'
+import BoxScoreDialog from 'components/admin/BoxScoreDialog.vue'
 import { currentSeason } from 'src/utils/season'
 import type { MatchEvent, MatchEventType, MatchWinType, Wrestler } from 'src/types'
 
@@ -177,31 +184,31 @@ const CALLS: { type: MatchEventType; label: string; hint: string }[] = [
   { type: 'nearFall4', label: 'N4', hint: 'Near fall 4' },
 ]
 
-/** Called on the offender, which is how the official says it. */
-const INFRACTION_CALLS: { type: MatchEventType; label: string; hint: string }[] = [
-  { type: 'penalty1', label: 'P1', hint: 'Penalty, 1' },
-  { type: 'penalty2', label: 'P2', hint: 'Penalty, 2' },
-]
-
 function record(type: MatchEventType, side: 'wrestler' | 'opponent') {
   events.value = [...events.value, { type, side, period: period.value }]
 }
 
 // ---------------------------------------------------------------------------
-// Stalling
+// Infractions
 // ---------------------------------------------------------------------------
 
 /**
- * One button per side rather than one per rung.
+ * Three separate counters, each on its own chart.
  *
- * Stalling is priced by how many that wrestler already has, and a scorer
- * tracking that in their head while watching the mat will get it wrong. The
- * official calls "stalling" and nothing else, so that is what the button says;
- * which rung it lands on is worked out here.
+ * Stalling, cautions and the general penalty progression are deliberately
+ * independent under NFHS, and two of the three are priced by how many came
+ * before. A scorer tracking that in their head while watching the mat will get
+ * it wrong, so each button says only what the official says — "stalling",
+ * "caution" — and works out the rung itself.
  */
 const stalls = computed(() => ({
   wrestler: stallCount(events.value, 'wrestler'),
   opponent: stallCount(events.value, 'opponent'),
+}))
+
+const cautions = computed(() => ({
+  wrestler: cautionCount(events.value, 'wrestler'),
+  opponent: cautionCount(events.value, 'opponent'),
 }))
 
 const PIPS = Array.from({ length: STALL_DQ_AT }, (_, i) => i + 1)
@@ -215,6 +222,100 @@ function recordStall(side: 'wrestler' | 'opponent') {
 
   if (prior + 1 >= STALL_DQ_AT) endByStalling(side)
 }
+
+function recordCaution(side: 'wrestler' | 'opponent') {
+  record(nextCautionCall(cautions.value[side]), side)
+}
+
+interface InfractionButton {
+  key: string
+  icon: string
+  /** What this call will cost, from the chart. */
+  caption: string
+  aria: string
+  disabled: boolean
+  /** One more ends the bout. */
+  final: boolean
+  run: () => void
+}
+
+/**
+ * Built here rather than in the template because each button's label and state
+ * depend on the count so far, and four of these repeated across two sides is
+ * eight places for the two halves to drift apart.
+ */
+function infractionsFor(side: 'wrestler' | 'opponent'): InfractionButton[] {
+  const band = side === 'wrestler' ? ourBand.value : theirBand.value
+  const stallsNow = stalls.value[side]
+  const cautionsNow = cautions.value[side]
+
+  return [
+    {
+      key: 'stall',
+      icon: 'hourglass_empty',
+      caption: stallConsequenceShort(stallsNow),
+      aria: `Stalling on ${band}: ${stallConsequence(stallsNow)}`,
+      disabled: stallsNow >= STALL_DQ_AT,
+      final: stallsNow === STALL_DQ_AT - 1,
+      run: () => recordStall(side),
+    },
+    {
+      key: 'caution',
+      icon: 'pan_tool',
+      caption: cautionConsequenceShort(cautionsNow),
+      aria: `Caution on ${band}: ${cautionConsequence(cautionsNow)}`,
+      disabled: false,
+      final: false,
+      run: () => recordCaution(side),
+    },
+    {
+      key: 'penalty1',
+      icon: 'flag',
+      caption: '1 pt',
+      aria: `Penalty, one point, on ${band}`,
+      disabled: false,
+      final: false,
+      run: () => record('penalty1', side),
+    },
+    {
+      key: 'penalty2',
+      icon: 'flag',
+      caption: '2 pts',
+      aria: `Penalty, two points, on ${band}`,
+      disabled: false,
+      final: false,
+      run: () => record('penalty2', side),
+    },
+  ]
+}
+
+const ourInfractions = computed(() => infractionsFor('wrestler'))
+const theirInfractions = computed(() => infractionsFor('opponent'))
+
+// ---------------------------------------------------------------------------
+// The tape
+// ---------------------------------------------------------------------------
+
+const TAPE_LENGTH = 5
+
+/**
+ * The last few calls, oldest to newest.
+ *
+ * Left to right in the order they happened, which puts the most recent one
+ * next to Undo — so the thing that button will remove is the thing beside it.
+ */
+const recentCalls = computed(() => {
+  const start = Math.max(0, events.value.length - TAPE_LENGTH)
+  return events.value.slice(start).map((event, i) => ({
+    key: start + i,
+    label: eventLabel(event.type),
+    name: eventName(event.type),
+    band: event.side === 'wrestler' ? ourBand.value : theirBand.value,
+    infraction: isInfraction(event.type),
+  }))
+})
+
+const boxScoreOpen = ref(false)
 
 /** The fifth call ends the bout, so the finish screen opens already filled in. */
 function endByStalling(offender: 'wrestler' | 'opponent') {
@@ -244,10 +345,20 @@ function startBout() {
 const periodLabel = computed(() =>
   period.value <= 3 ? `Period ${period.value}` : `Overtime ${period.value - 3}`)
 
+/** Abbreviated, because it now lives in a narrow column between the scores. */
+const periodShort = computed(() =>
+  period.value <= 3 ? `P${period.value}` : `OT${period.value - 3}`)
+
 const endPeriodLabel = computed(() => {
   if (period.value < 3) return `End period ${period.value}`
   if (period.value === 3) return 'Go to overtime'
   return 'Next overtime'
+})
+
+const endPeriodShort = computed(() => {
+  if (period.value < 3) return 'End period'
+  if (period.value === 3) return 'Overtime'
+  return 'Next OT'
 })
 
 function endPeriod() {
@@ -414,64 +525,162 @@ useMeta({ title: 'Score a bout' })
     <!-- SCORING -->
     <section v-else-if="stage === 'scoring'" class="score-live">
       <header class="score-head">
-        <div class="score-head__row">
-          <div class="score-side" :class="`score-side--${ourBand}`">
-            <div class="score-side__band">{{ ourBand }}</div>
-            <div class="score-side__name">{{ wrestlerName }}</div>
-            <div class="score-side__num">{{ score.for }}</div>
-            <!-- Five pips, because the fifth stalling call disqualifies. The
-                 last one is drawn apart and in red: it is not another point,
-                 it ends the bout. -->
-            <div
-              class="pips"
-              :aria-label="`${stalls.wrestler} of ${STALL_DQ_AT} stalling calls`"
-            >
-              <span
-                v-for="n in PIPS"
-                :key="`us-${n}`"
-                class="pip"
-                :class="{
-                  'pip--on': stalls.wrestler >= n,
-                  'pip--last': n === STALL_DQ_AT,
-                }"
-              />
-            </div>
-          </div>
-          <div class="score-side" :class="`score-side--${theirBand}`">
-            <div class="score-side__band">{{ theirBand }}</div>
-            <div class="score-side__name">{{ opponentName || 'Opponent' }}</div>
-            <div class="score-side__num">{{ score.against }}</div>
-            <div
-              class="pips"
-              :aria-label="`${stalls.opponent} of ${STALL_DQ_AT} stalling calls`"
-            >
-              <span
-                v-for="n in PIPS"
-                :key="`them-${n}`"
-                class="pip"
-                :class="{
-                  'pip--on': stalls.opponent >= n,
-                  'pip--last': n === STALL_DQ_AT,
-                }"
-              />
-            </div>
+        <div class="score-side" :class="`score-side--${ourBand}`">
+          <div class="score-side__band">{{ ourBand }}</div>
+          <div class="score-side__name">{{ wrestlerName }}</div>
+          <div class="score-side__num">{{ score.for }}</div>
+          <!-- Five pips, because the fifth stalling call disqualifies. The
+               last one is drawn apart and in red: it is not another point,
+               it ends the bout. -->
+          <div
+            class="pips"
+            :aria-label="`${stalls.wrestler} of ${STALL_DQ_AT} stalling calls`"
+          >
+            <span
+              v-for="n in PIPS"
+              :key="`us-${n}`"
+              class="pip"
+              :class="{
+                'pip--on': stalls.wrestler >= n,
+                'pip--last': n === STALL_DQ_AT,
+              }"
+            />
           </div>
         </div>
-        <div class="score-head__period">
-          <q-btn
-            v-if="period > 1"
-            dense
-            flat
-            round
-            size="sm"
-            color="white"
-            icon="chevron_left"
-            aria-label="Back a period"
-            @click="backPeriod"
-          />
-          {{ periodLabel }}
+
+        <!-- Match controls belong between the scores: it is the one part of the
+             board that is neither wrestler's, and it keeps them off the edges
+             where a thumb rests while scoring. -->
+        <div class="centre">
+          <div class="centre__period" :aria-label="periodLabel">
+            <q-btn
+              v-if="period > 1"
+              dense
+              flat
+              round
+              size="xs"
+              color="white"
+              icon="chevron_left"
+              aria-label="Back a period"
+              @click="backPeriod"
+            />
+            <span>{{ periodShort }}</span>
+          </div>
+          <!-- The button is abbreviated to fit the column; the full wording is
+               kept for anything reading it aloud. -->
+          <button
+            type="button"
+            class="centre__btn"
+            :aria-label="endPeriodLabel"
+            @click="endPeriod"
+          >{{ endPeriodShort }}</button>
+          <button
+            type="button"
+            class="centre__btn centre__btn--end"
+            @click="endMatch"
+          >End match</button>
+        </div>
+
+        <div class="score-side" :class="`score-side--${theirBand}`">
+          <div class="score-side__band">{{ theirBand }}</div>
+          <div class="score-side__name">{{ opponentName || 'Opponent' }}</div>
+          <div class="score-side__num">{{ score.against }}</div>
+          <div
+            class="pips"
+            :aria-label="`${stalls.opponent} of ${STALL_DQ_AT} stalling calls`"
+          >
+            <span
+              v-for="n in PIPS"
+              :key="`them-${n}`"
+              class="pip"
+              :class="{
+                'pip--on': stalls.opponent >= n,
+                'pip--last': n === STALL_DQ_AT,
+              }"
+            />
+          </div>
         </div>
       </header>
+
+      <!-- Infractions sit above the scoring buttons and are deliberately
+           small. They are the rarest calls by a distance and the most costly
+           to hit by accident, so they get the least reachable row and the
+           smallest targets, while the six calls that make up almost every
+           bout get the bottom of the screen and the big ones.
+
+           Outlined rather than filled because they are the one set that does
+           NOT score for the colour they sit under: tap on the offender, as the
+           official calls it, and the point goes the other way. -->
+      <div class="call-note">Infractions — tap on the offender</div>
+      <div class="inf-grid">
+        <div class="inf-col">
+          <button
+            v-for="button in ourInfractions"
+            :key="`us-${button.key}`"
+            type="button"
+            class="inf-btn"
+            :class="[`inf-btn--${ourBand}`, { 'inf-btn--final': button.final }]"
+            :disabled="button.disabled"
+            :title="button.aria"
+            :aria-label="button.aria"
+            @click="button.run()"
+          >
+            <q-icon :name="button.icon" size="17px" />
+            <span class="inf-btn__cap">{{ button.caption }}</span>
+          </button>
+        </div>
+        <div class="inf-col">
+          <button
+            v-for="button in theirInfractions"
+            :key="`them-${button.key}`"
+            type="button"
+            class="inf-btn"
+            :class="[`inf-btn--${theirBand}`, { 'inf-btn--final': button.final }]"
+            :disabled="button.disabled"
+            :title="button.aria"
+            :aria-label="button.aria"
+            @click="button.run()"
+          >
+            <q-icon :name="button.icon" size="17px" />
+            <span class="inf-btn__cap">{{ button.caption }}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- The tape: what has just gone in, so a mis-tap is visible immediately
+           rather than at the end of the bout. Undo sits at its right-hand end,
+           beside the call it will remove. -->
+      <div class="tape-row">
+        <ul class="tape">
+          <li v-if="recentCalls.length === 0" class="tape__empty">No calls yet</li>
+          <li
+            v-for="call in recentCalls"
+            :key="call.key"
+            class="tape__chip"
+            :class="[`tape__chip--${call.band}`, { 'tape__chip--outline': call.infraction }]"
+            :title="call.name"
+          >{{ call.label }}</li>
+        </ul>
+        <q-btn
+          dense
+          flat
+          round
+          color="white"
+          icon="undo"
+          aria-label="Undo the last call"
+          :disable="events.length === 0"
+          @click="undo"
+        />
+        <q-btn
+          dense
+          flat
+          round
+          color="white"
+          icon="table_rows"
+          aria-label="Open the box score"
+          @click="boxScoreOpen = true"
+        />
+      </div>
 
       <!-- Columns are the two bands, not "us" and "them". Ours stays on the
            left so the layout never moves, but it wears whichever colour was
@@ -503,96 +712,14 @@ useMeta({ title: 'Score a bout' })
         </div>
       </div>
 
-      <!-- Outlined rather than filled, because these are the one set of
-           buttons that do NOT score for the colour they sit under. Tap them on
-           the offender, as the official calls it; the point goes the other way. -->
-      <div class="call-note">Infractions — tap on the offender, the point goes the other way</div>
-
-      <!-- One stall button per side. What it costs is worked out from the count
-           and shown under the label, so the scorer never has to remember the
-           chart mid-bout. -->
-      <div class="call-grid call-grid--small">
-        <button
-          type="button"
-          class="call-btn call-btn--infraction stall-btn"
-          :class="[
-            `call-btn--on-${ourBand}`,
-            { 'stall-btn--final': stalls.wrestler === STALL_DQ_AT - 1 },
-          ]"
-          :disabled="stalls.wrestler >= STALL_DQ_AT"
-          :aria-label="`Stalling on ${ourBand}: ${stallConsequence(stalls.wrestler)}`"
-          @click="recordStall('wrestler')"
-        >
-          Stall
-          <span class="stall-btn__next">{{ stallConsequence(stalls.wrestler) }}</span>
-        </button>
-        <button
-          type="button"
-          class="call-btn call-btn--infraction stall-btn"
-          :class="[
-            `call-btn--on-${theirBand}`,
-            { 'stall-btn--final': stalls.opponent === STALL_DQ_AT - 1 },
-          ]"
-          :disabled="stalls.opponent >= STALL_DQ_AT"
-          :aria-label="`Stalling on ${theirBand}: ${stallConsequence(stalls.opponent)}`"
-          @click="recordStall('opponent')"
-        >
-          Stall
-          <span class="stall-btn__next">{{ stallConsequence(stalls.opponent) }}</span>
-        </button>
-      </div>
-      <div class="call-grid call-grid--small">
-        <div class="call-col">
-          <button
-            v-for="call in INFRACTION_CALLS"
-            :key="`us-${call.type}`"
-            type="button"
-            class="call-btn call-btn--infraction"
-            :class="`call-btn--on-${ourBand}`"
-            :title="call.hint"
-            :aria-label="`${call.hint}, called on ${ourBand}`"
-            @click="record(call.type, 'wrestler')"
-          >{{ call.label }}</button>
-        </div>
-        <div class="call-col">
-          <button
-            v-for="call in INFRACTION_CALLS"
-            :key="`them-${call.type}`"
-            type="button"
-            class="call-btn call-btn--infraction"
-            :class="`call-btn--on-${theirBand}`"
-            :title="call.hint"
-            :aria-label="`${call.hint}, called on ${theirBand}`"
-            @click="record(call.type, 'opponent')"
-          >{{ call.label }}</button>
-        </div>
-      </div>
-
-      <div class="score-actions">
-        <q-btn
-          outline
-          no-caps
-          color="white"
-          icon="undo"
-          label="Undo"
-          :disable="events.length === 0"
-          @click="undo"
-        />
-        <q-btn
-          outline
-          no-caps
-          color="white"
-          icon="timer"
-          :label="endPeriodLabel"
-          @click="endPeriod"
-        />
-        <q-space />
-        <q-btn unelevated no-caps color="primary" label="End match" @click="endMatch" />
-      </div>
-
-      <div class="score-log">
-        {{ events.length }} call{{ events.length === 1 ? '' : 's' }} recorded
-      </div>
+      <BoxScoreDialog
+        v-model="boxScoreOpen"
+        :events="events"
+        :our-name="wrestlerName || 'Ours'"
+        :their-name="opponentName || 'Opponent'"
+        :our-band="ourBand ?? 'red'"
+        @update:events="events = $event"
+      />
     </section>
 
     <!-- FINISH -->
@@ -787,15 +914,14 @@ useMeta({ title: 'Score a bout' })
 
 /* Scoreboard ------------------------------------------------------------ */
 
+/* Three columns: a wrestler, the controls, the other wrestler. The centre is
+   sized to its content so the two scores always get equal space. */
 .score-head {
+  display: grid;
+  grid-template-columns: 1fr minmax(88px, auto) 1fr;
+  gap: 8px;
   text-align: center;
   margin-bottom: 14px;
-}
-
-.score-head__row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
 }
 
 /* Each side sits over its own column of buttons, so the eye never has to
@@ -884,16 +1010,55 @@ useMeta({ title: 'Score a bout' })
   background: var(--band-red-ink);
 }
 
-.score-head__period {
+/* Match controls ---------------------------------------------------------
+ *
+ * Between the scores rather than along the bottom: this column belongs to
+ * neither wrestler, and the bottom of the screen is now entirely the six
+ * scoring buttons, which is where a thumb should be able to land blind.
+ */
+.centre {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.centre__period {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  font-size: 0.8rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.55);
-  margin-top: 8px;
+  gap: 1px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.86rem;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.centre__btn {
+  appearance: none;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 7px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.centre__btn:active {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.centre__btn--end {
+  border-color: var(--gold-500, #d4a017);
+  color: var(--gold-500, #d4a017);
 }
 
 /* Calls ----------------------------------------------------------------- */
@@ -938,81 +1103,153 @@ useMeta({ title: 'Score a bout' })
   background: var(--band-green);
 }
 
-/* Outlined: called ON this colour, and the point goes to the other one. The
-   difference in treatment is the only thing stopping a scorer from reading
-   these as "green scored" at a glance. */
-.call-btn--infraction {
-  font-size: 1rem;
-  padding: 10px 0;
-  background: transparent;
+.call-note {
+  margin-bottom: 4px;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
 }
 
-.call-btn--on-red {
+/* Infractions ------------------------------------------------------------
+ *
+ * Outlined, never filled: these are the one set of buttons that does NOT
+ * score for the colour they sit under, and the difference in treatment is
+ * what stops a scorer reading them as "green scored" at a glance.
+ *
+ * Icons carry a caption rather than standing alone. Bare glyphs would be
+ * smaller still, but a scorer who has to pause and decode one has lost the
+ * time the small size was meant to save, and these calls are the expensive
+ * ones to get wrong.
+ */
+.inf-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.inf-col {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.inf-btn {
+  appearance: none;
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 0;
+  padding: 5px 1px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid transparent;
+  background: transparent;
+  cursor: pointer;
+}
+
+.inf-btn:active {
+  filter: brightness(1.3);
+}
+
+.inf-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.inf-btn--red {
   border-color: var(--band-red-ink);
   color: var(--band-red-ink);
 }
 
-.call-btn--on-green {
+.inf-btn--green {
   border-color: var(--band-green-ink);
   color: var(--band-green-ink);
 }
 
-.call-btn:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-/* Stalling -------------------------------------------------------------- */
-
-.stall-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
+/* What this call will cost, read straight off the chart. */
+.inf-btn__cap {
+  font-size: 0.6rem;
+  letter-spacing: 0.02em;
   line-height: 1.1;
-}
-
-/* What the next call costs, read straight off the chart. */
-.stall-btn__next {
-  font-family: var(--font-body, inherit);
-  font-weight: 400;
-  font-size: 0.68rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  opacity: 0.85;
+  white-space: nowrap;
 }
 
 /* One more ends it. Worth shouting about before it is tapped, not after. */
-.stall-btn--final {
+.inf-btn--final {
   border-color: var(--band-red-ink);
   color: var(--band-red-ink);
-  background: rgba(198, 36, 49, 0.18);
+  background: rgba(198, 36, 49, 0.22);
 }
 
-.call-grid--small {
-  margin-top: 6px;
-}
-
-.call-note {
-  margin-top: 16px;
-  font-size: 0.72rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.45);
-}
-
-.score-actions {
+/* The tape ---------------------------------------------------------------
+ *
+ * Oldest to newest, left to right, so the newest sits next to Undo — the
+ * button that will remove it.
+ */
+.tape-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 18px;
+  gap: 4px;
+  margin-bottom: 12px;
+  min-height: 34px;
 }
 
-.score-log {
-  margin-top: 10px;
-  font-size: 0.78rem;
-  color: rgba(255, 255, 255, 0.45);
+.tape {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tape__chip {
+  flex: none;
+  min-width: 30px;
   text-align: center;
+  padding: 3px 5px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid transparent;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.78rem;
+  color: #fff;
+}
+
+.tape__chip--red {
+  background: var(--band-red);
+}
+
+.tape__chip--green {
+  background: var(--band-green);
+}
+
+/* Mirrors the buttons: filled scored for that colour, outlined was called on
+   it. Same rule in both places means the tape needs no legend. */
+.tape__chip--outline {
+  background: transparent;
+}
+
+.tape__chip--outline.tape__chip--red {
+  border-color: var(--band-red-ink);
+  color: var(--band-red-ink);
+}
+
+.tape__chip--outline.tape__chip--green {
+  border-color: var(--band-green-ink);
+  color: var(--band-green-ink);
+}
+
+.tape__empty {
+  font-size: 0.76rem;
+  color: rgba(255, 255, 255, 0.35);
 }
 
 .score-warn {

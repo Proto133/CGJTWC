@@ -51,6 +51,8 @@ const POINTS: Record<MatchEventType, number> = {
   // The fifth ends the bout rather than scoring. Recorded so the count is
   // complete and the disqualification has something behind it.
   stallDq: 0,
+  caution: 0,
+  cautionPoint: 1,
 }
 
 /**
@@ -66,13 +68,25 @@ const INFRACTIONS: ReadonlySet<MatchEventType> = new Set<MatchEventType>([
   'stallPoint',
   'stallPoint2',
   'stallDq',
+  'caution',
+  'cautionPoint',
 ])
+
+/** Whether a call is credited to the opponent of the wrestler it was made on. */
+export function isInfraction(type: MatchEventType): boolean {
+  return INFRACTIONS.has(type)
+}
 
 const STALLS: ReadonlySet<MatchEventType> = new Set<MatchEventType>([
   'stallWarning',
   'stallPoint',
   'stallPoint2',
   'stallDq',
+])
+
+const CAUTIONS: ReadonlySet<MatchEventType> = new Set<MatchEventType>([
+  'caution',
+  'cautionPoint',
 ])
 
 /** Folkstyle technical superiority. A rules value, not a constant. */
@@ -123,9 +137,75 @@ export function stallConsequence(priorStalls: number): string {
   return STALL_CONSEQUENCES[index] as string
 }
 
+/** The same, abbreviated for a button caption. */
+const STALL_CONSEQUENCES_SHORT: readonly string[] = ['Warn', '1 pt', '1 pt', '2 pts', 'DQ']
+
+export function stallConsequenceShort(priorStalls: number): string {
+  const index = Math.min(Math.max(priorStalls, 0), STALL_CONSEQUENCES_SHORT.length - 1)
+  return STALL_CONSEQUENCES_SHORT[index] as string
+}
+
 /** Stalls called on one wrestler. `side` is the offender, as recorded. */
 export function stallCount(events: MatchEvent[], side: 'wrestler' | 'opponent'): number {
   return events.filter((e) => e.side === side && STALLS.has(e.type)).length
+}
+
+/**
+ * False start and incorrect starting position (8-1-3).
+ *
+ * A third counter, independent of both the stalling chart and the general
+ * penalty progression: two cautions are free, then every subsequent one is a
+ * point. There is no disqualification rung, so unlike stalling this does not
+ * terminate — hence a threshold rather than a fixed sequence.
+ */
+export const CAUTIONS_FREE = 2
+
+export function nextCautionCall(priorCautions: number): MatchEventType {
+  return priorCautions < CAUTIONS_FREE ? 'caution' : 'cautionPoint'
+}
+
+export function cautionConsequence(priorCautions: number): string {
+  return priorCautions < CAUTIONS_FREE ? 'Caution' : '1 point'
+}
+
+export function cautionConsequenceShort(priorCautions: number): string {
+  return priorCautions < CAUTIONS_FREE ? 'Caution' : '1 pt'
+}
+
+export function cautionCount(events: MatchEvent[], side: 'wrestler' | 'opponent'): number {
+  return events.filter((e) => e.side === side && CAUTIONS.has(e.type)).length
+}
+
+/**
+ * Rewrites every position-priced call to match its chart.
+ *
+ * Stalls and cautions cost what they cost because of how many came before them
+ * on that wrestler, so deleting one or reassigning it to the other side
+ * reprices every one after it. A log edited without this would show a score the
+ * rules cannot produce — the first stall billed as a point, say, because the
+ * warning ahead of it was removed.
+ *
+ * Everything else is priced by its own name and passes through untouched.
+ */
+export function renormaliseInfractions(events: MatchEvent[]): MatchEvent[] {
+  const stalls = { wrestler: 0, opponent: 0 }
+  const cautions = { wrestler: 0, opponent: 0 }
+
+  return events.map((event) => {
+    if (STALLS.has(event.type)) {
+      const type = nextStallCall(stalls[event.side])
+      stalls[event.side] += 1
+      return type === event.type ? event : { ...event, type }
+    }
+
+    if (CAUTIONS.has(event.type)) {
+      const type = nextCautionCall(cautions[event.side])
+      cautions[event.side] += 1
+      return type === event.type ? event : { ...event, type }
+    }
+
+    return event
+  })
 }
 
 /** NFHS dual-meet team points, which IKWF adopts wholesale. */
@@ -165,6 +245,7 @@ export function emptyCounts(): MatchCounts {
     nearFall4: 0,
     penalties: 0,
     stalls: 0,
+    cautions: 0,
   }
 }
 
@@ -207,6 +288,8 @@ export function countsFromEvents(
       case 'stallPoint':
       case 'stallPoint2':
       case 'stallDq': counts.stalls += 1; break
+      case 'caution':
+      case 'cautionPoint': counts.cautions += 1; break
     }
   }
 
@@ -221,7 +304,11 @@ export function countsFromEvents(
  */
 export function matchCounts(match: Pick<Match, 'events' | 'counts'>): MatchCounts | null {
   if (match.events?.length) return countsFromEvents(match.events)
-  return match.counts ?? null
+  if (!match.counts) return null
+  // Merged over a blank set rather than returned raw: a stored map missing a
+  // key reads as undefined, and undefined added to a running total is NaN,
+  // which then poisons every figure downstream of it without erroring.
+  return { ...emptyCounts(), ...match.counts }
 }
 
 export interface Score {
