@@ -9,6 +9,7 @@ import {
   suggestWinType,
   undoLast,
 } from 'src/utils/matchScoring'
+import { WIN_TYPE_OPTIONS } from 'src/utils/wrestlerStats'
 import { currentSeason } from 'src/utils/season'
 import type { MatchEvent, MatchEventType, MatchWinType, Wrestler } from 'src/types'
 
@@ -34,6 +35,19 @@ type Stage = 'pick' | 'scoring' | 'finish'
 const stage = ref<Stage>('pick')
 
 const wrestlerId = ref<string | null>(null)
+
+/**
+ * Which ankle band our wrestler is wearing.
+ *
+ * Declared before the bout starts rather than assumed, because the whole
+ * screen keys off it. A scorer watching the mat sees two colours, not "us" and
+ * "them", and a column that does not match the band they are looking at is a
+ * column they will tap wrong.
+ */
+type Band = 'red' | 'green'
+const ourBand = ref<Band | null>(null)
+const theirBand = computed<Band>(() => (ourBand.value === 'red' ? 'green' : 'red'))
+
 const opponentName = ref('')
 const opponentTeam = ref('')
 const weightClass = ref('')
@@ -97,6 +111,7 @@ function saveDraft() {
       weightClass: weightClass.value,
       round: round.value,
       eventId: eventId.value,
+      ourBand: ourBand.value,
       events: events.value,
       period: period.value,
     }))
@@ -117,6 +132,9 @@ function restoreDraft() {
     weightClass.value = (draft.weightClass as string) ?? ''
     round.value = (draft.round as string) ?? ''
     eventId.value = (draft.eventId as string) ?? null
+    // Older drafts predate the band, so a restored bout may have none. Red is
+    // the safer default of the two: it is the first band called.
+    ourBand.value = (draft.ourBand as Band) ?? 'red'
     events.value = (draft.events as MatchEvent[]) ?? []
     period.value = (draft.period as number) ?? 1
   } catch {
@@ -132,7 +150,7 @@ function clearDraft() {
   }
 }
 
-watch([events, period, stage], saveDraft, { deep: true })
+watch([events, period, stage, ourBand], saveDraft, { deep: true })
 
 // ---------------------------------------------------------------------------
 // Scoring
@@ -170,14 +188,29 @@ function undo() {
 }
 
 function startBout() {
-  if (!wrestlerId.value) return
+  if (!wrestlerId.value || !ourBand.value) return
   events.value = []
   period.value = 1
   stage.value = 'scoring'
 }
 
+/** Periods 1–3, then overtime continues the sequence. */
+const periodLabel = computed(() =>
+  period.value <= 3 ? `Period ${period.value}` : `Overtime ${period.value - 3}`)
+
+const endPeriodLabel = computed(() => {
+  if (period.value < 3) return `End period ${period.value}`
+  if (period.value === 3) return 'Go to overtime'
+  return 'Next overtime'
+})
+
 function endPeriod() {
   period.value += 1
+}
+
+/** Undo only truncates the call log, so a mis-tapped period needs its own way back. */
+function backPeriod() {
+  if (period.value > 1) period.value -= 1
 }
 
 function endMatch() {
@@ -228,6 +261,9 @@ function reset() {
   stage.value = 'pick'
   events.value = []
   period.value = 1
+  // Cleared rather than carried over: the next bout is a different draw and
+  // inheriting the last one's band is how a whole bout gets scored backwards.
+  ourBand.value = null
   opponentName.value = ''
   opponentTeam.value = ''
   round.value = ''
@@ -266,6 +302,28 @@ useMeta({ title: 'Score a bout' })
         No wrestlers on the roster yet. Add them in the dashboard first.
       </div>
 
+      <!-- Required, not defaulted. Guessing this wrong scores the whole bout
+           on the wrong side, and there is no way to tell afterwards. -->
+      <div class="band-pick">
+        <div class="band-pick__label">Our wrestler's band *</div>
+        <div class="band-pick__row">
+          <button
+            type="button"
+            class="band-opt band-opt--red"
+            :class="{ 'band-opt--on': ourBand === 'red' }"
+            :aria-pressed="ourBand === 'red'"
+            @click="ourBand = 'red'"
+          >Red</button>
+          <button
+            type="button"
+            class="band-opt band-opt--green"
+            :class="{ 'band-opt--on': ourBand === 'green' }"
+            :aria-pressed="ourBand === 'green'"
+            @click="ourBand = 'green'"
+          >Green</button>
+        </div>
+      </div>
+
       <q-select
         v-model="eventId"
         :options="eventOptions"
@@ -300,7 +358,7 @@ useMeta({ title: 'Score a bout' })
         no-caps
         size="lg"
         label="Start match"
-        :disable="!wrestlerId"
+        :disable="!wrestlerId || !ourBand"
         @click="startBout"
       />
     </section>
@@ -308,21 +366,37 @@ useMeta({ title: 'Score a bout' })
     <!-- SCORING -->
     <section v-else-if="stage === 'scoring'" class="score-live">
       <header class="score-head">
-        <div class="score-head__names">
-          <span class="score-head__us">{{ wrestlerName }}</span>
-          <span class="score-head__them">{{ opponentName || 'Opponent' }}</span>
+        <div class="score-head__row">
+          <div class="score-side" :class="`score-side--${ourBand}`">
+            <div class="score-side__band">{{ ourBand }}</div>
+            <div class="score-side__name">{{ wrestlerName }}</div>
+            <div class="score-side__num">{{ score.for }}</div>
+          </div>
+          <div class="score-side" :class="`score-side--${theirBand}`">
+            <div class="score-side__band">{{ theirBand }}</div>
+            <div class="score-side__name">{{ opponentName || 'Opponent' }}</div>
+            <div class="score-side__num">{{ score.against }}</div>
+          </div>
         </div>
-        <div class="score-head__score">
-          <span class="score-head__num">{{ score.for }}</span>
-          <span class="score-head__dash">–</span>
-          <span class="score-head__num">{{ score.against }}</span>
+        <div class="score-head__period">
+          <q-btn
+            v-if="period > 1"
+            dense
+            flat
+            round
+            size="sm"
+            color="white"
+            icon="chevron_left"
+            aria-label="Back a period"
+            @click="backPeriod"
+          />
+          {{ periodLabel }}
         </div>
-        <div class="score-head__period">Period {{ period }}</div>
       </header>
 
-      <!-- Two columns, our wrestler on the left, matching how a scorer faces
-           the mat. Scoring calls are tapped in the column of whoever scored;
-           infractions in the column of whoever they were called on. -->
+      <!-- Columns are the two bands, not "us" and "them". Ours stays on the
+           left so the layout never moves, but it wears whichever colour was
+           declared. Filled buttons add points to that colour. -->
       <div class="call-grid">
         <div class="call-col">
           <button
@@ -330,7 +404,9 @@ useMeta({ title: 'Score a bout' })
             :key="`us-${call.type}`"
             type="button"
             class="call-btn"
+            :class="`call-btn--${ourBand}`"
             :title="call.hint"
+            :aria-label="`${call.hint}, ${ourBand}`"
             @click="record(call.type, 'wrestler')"
           >{{ call.label }}</button>
         </div>
@@ -339,14 +415,19 @@ useMeta({ title: 'Score a bout' })
             v-for="call in CALLS"
             :key="`them-${call.type}`"
             type="button"
-            class="call-btn call-btn--them"
+            class="call-btn"
+            :class="`call-btn--${theirBand}`"
             :title="call.hint"
+            :aria-label="`${call.hint}, ${theirBand}`"
             @click="record(call.type, 'opponent')"
           >{{ call.label }}</button>
         </div>
       </div>
 
-      <div class="call-note">Infractions — tap on whoever it was called against</div>
+      <!-- Outlined rather than filled, because these are the one set of
+           buttons that do NOT score for the colour they sit under. Tap them on
+           the offender, as the official calls it; the point goes the other way. -->
+      <div class="call-note">Infractions — tap on the offender, the point goes the other way</div>
       <div class="call-grid call-grid--small">
         <div class="call-col">
           <button
@@ -354,7 +435,9 @@ useMeta({ title: 'Score a bout' })
             :key="`us-${call.type}`"
             type="button"
             class="call-btn call-btn--infraction"
+            :class="`call-btn--on-${ourBand}`"
             :title="call.hint"
+            :aria-label="`${call.hint}, called on ${ourBand}`"
             @click="record(call.type, 'wrestler')"
           >{{ call.label }}</button>
         </div>
@@ -363,8 +446,10 @@ useMeta({ title: 'Score a bout' })
             v-for="call in INFRACTION_CALLS"
             :key="`them-${call.type}`"
             type="button"
-            class="call-btn call-btn--infraction call-btn--them"
+            class="call-btn call-btn--infraction"
+            :class="`call-btn--on-${theirBand}`"
             :title="call.hint"
+            :aria-label="`${call.hint}, called on ${theirBand}`"
             @click="record(call.type, 'opponent')"
           >{{ call.label }}</button>
         </div>
@@ -372,7 +457,7 @@ useMeta({ title: 'Score a bout' })
 
       <div class="score-actions">
         <q-btn
-          flat
+          outline
           no-caps
           color="white"
           icon="undo"
@@ -380,7 +465,14 @@ useMeta({ title: 'Score a bout' })
           :disable="events.length === 0"
           @click="undo"
         />
-        <q-btn flat no-caps color="white" label="End period" @click="endPeriod" />
+        <q-btn
+          outline
+          no-caps
+          color="white"
+          icon="timer"
+          :label="endPeriodLabel"
+          @click="endPeriod"
+        />
         <q-space />
         <q-btn unelevated no-caps color="primary" label="End match" @click="endMatch" />
       </div>
@@ -440,16 +532,7 @@ useMeta({ title: 'Score a bout' })
 
       <q-select
         v-model="winType"
-        :options="[
-          { label: 'Decision', value: 'decision' },
-          { label: 'Major decision', value: 'majorDecision' },
-          { label: 'Technical fall', value: 'techFall' },
-          { label: 'Fall', value: 'fall' },
-          { label: 'Forfeit', value: 'forfeit' },
-          { label: 'Injury default', value: 'injuryDefault' },
-          { label: 'Disqualification', value: 'disqualification' },
-          { label: 'Bye', value: 'bye' },
-        ]"
+        :options="WIN_TYPE_OPTIONS"
         label="How it ended"
         hint="Suggested from the score. A fall or injury default can happen at any score."
         outlined
@@ -486,6 +569,22 @@ useMeta({ title: 'Score a bout' })
   background: var(--navy-900);
   color: #fff;
   padding: 16px;
+
+  /*
+   * The mat's own colours. Fills carry white text; the lighter "ink" variants
+   * are for text and borders, where the saturated fill colours would not clear
+   * the contrast threshold against navy.
+   *
+   * Red and green together is the worst pairing for colour blindness, which is
+   * roughly one man in twelve. It is also what is physically strapped to the
+   * wrestlers' ankles, so substituting friendlier colours would make the screen
+   * disagree with the mat. Every coloured element is therefore labelled "Red"
+   * or "Green" in words as well, and the columns never swap position.
+   */
+  --band-red: #c62431;
+  --band-red-ink: #ff8a94;
+  --band-green: #14803c;
+  --band-green-ink: #5fd98a;
 }
 
 .score-title {
@@ -512,6 +611,64 @@ useMeta({ title: 'Score a bout' })
   padding: 14px 0;
 }
 
+/* Band selection -------------------------------------------------------- */
+
+.band-pick {
+  margin-bottom: 16px;
+}
+
+.band-pick__label {
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 6px;
+}
+
+.band-pick__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.band-opt {
+  appearance: none;
+  font: inherit;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 14px 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+}
+
+.band-opt--red {
+  border: 2px solid var(--band-red-ink);
+  color: var(--band-red-ink);
+}
+
+.band-opt--green {
+  border: 2px solid var(--band-green-ink);
+  color: var(--band-green-ink);
+}
+
+/* Selection is a fill, not a tint: this is the one choice on the screen
+   that cannot be recovered from afterwards. */
+.band-opt--red.band-opt--on {
+  background: var(--band-red);
+  border-color: var(--band-red);
+  color: #fff;
+}
+
+.band-opt--green.band-opt--on {
+  background: var(--band-green);
+  border-color: var(--band-green);
+  color: #fff;
+}
+
 /* Scoreboard ------------------------------------------------------------ */
 
 .score-head {
@@ -519,45 +676,71 @@ useMeta({ title: 'Score a bout' })
   margin-bottom: 14px;
 }
 
-.score-head__names {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.7);
-  margin-bottom: 2px;
+.score-head__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
-.score-head__us,
-.score-head__them {
-  max-width: 45%;
+/* Each side sits over its own column of buttons, so the eye never has to
+   work out which score belongs to which half of the screen. */
+.score-side {
+  border-top: 4px solid;
+  padding-top: 6px;
+  min-width: 0;
+}
+
+.score-side--red {
+  border-color: var(--band-red);
+}
+
+.score-side--green {
+  border-color: var(--band-green);
+}
+
+.score-side__band {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.score-side--red .score-side__band,
+.score-side--red .score-side__num {
+  color: var(--band-red-ink);
+}
+
+.score-side--green .score-side__band,
+.score-side--green .score-side__num {
+  color: var(--band-green-ink);
+}
+
+.score-side__name {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.score-head__score {
-  display: flex;
-  justify-content: center;
-  align-items: baseline;
-  gap: 14px;
+.score-side__num {
   font-family: var(--font-display);
   font-weight: 700;
   /* Deliberately huge: readable from a seat, not just in the hand. */
-  font-size: clamp(3rem, 18vw, 5rem);
+  font-size: clamp(2.6rem, 16vw, 4.5rem);
   line-height: 1;
 }
 
-.score-head__dash {
-  font-size: 0.5em;
-  color: rgba(255, 255, 255, 0.4);
-}
-
 .score-head__period {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
   font-size: 0.8rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.55);
-  margin-top: 4px;
+  margin-top: 8px;
 }
 
 /* Calls ----------------------------------------------------------------- */
@@ -582,24 +765,43 @@ useMeta({ title: 'Score a bout' })
   font-size: 1.5rem;
   padding: 16px 0;
   border-radius: var(--radius-md);
-  border: 2px solid rgba(255, 255, 255, 0.25);
+  border: 2px solid transparent;
   background: var(--navy-700);
   color: #fff;
   cursor: pointer;
 }
 
 .call-btn:active {
-  background: var(--navy-600);
   transform: scale(0.97);
+  filter: brightness(1.25);
 }
 
-.call-btn--them {
-  background: rgba(255, 255, 255, 0.08);
+/* Filled: a tap here puts points on this colour. */
+.call-btn--red {
+  background: var(--band-red);
 }
 
+.call-btn--green {
+  background: var(--band-green);
+}
+
+/* Outlined: called ON this colour, and the point goes to the other one. The
+   difference in treatment is the only thing stopping a scorer from reading
+   these as "green scored" at a glance. */
 .call-btn--infraction {
   font-size: 1rem;
   padding: 10px 0;
+  background: transparent;
+}
+
+.call-btn--on-red {
+  border-color: var(--band-red-ink);
+  color: var(--band-red-ink);
+}
+
+.call-btn--on-green {
+  border-color: var(--band-green-ink);
+  color: var(--band-green-ink);
 }
 
 .call-grid--small {

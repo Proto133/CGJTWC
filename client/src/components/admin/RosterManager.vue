@@ -286,7 +286,16 @@ function squadOf(wrestler: Wrestler): string {
     </div>
 
     <q-list v-else bordered separator class="rounded-borders">
-      <q-item v-for="wrestler in store.ordered" :key="wrestler.id">
+      <!-- The row itself opens the wrestler's bouts. Editing the roster entry
+           and editing their results are different jobs, so the pencil stays a
+           separate target and stops the row's own click. -->
+      <q-item
+        v-for="wrestler in store.ordered"
+        :key="wrestler.id"
+        clickable
+        :aria-label="`Bouts for ${wrestler.firstName} ${wrestler.lastName}`"
+        @click="openStats(wrestler)"
+      >
         <q-item-section>
           <q-item-label class="row items-center q-gutter-xs">
             <span class="text-weight-medium">
@@ -311,23 +320,23 @@ function squadOf(wrestler: Wrestler): string {
 
         <q-item-section side>
           <div class="row items-center q-gutter-xs">
+            <div class="record-value" :title="`${wrestler.firstName}'s season record`">
+              {{ record(wrestler) }}
+            </div>
             <q-btn
               dense
               flat
-              no-caps
-              :label="record(wrestler)"
-              :aria-label="`${wrestler.firstName}'s season record`"
-              class="record-btn"
-              @click="openStats(wrestler)"
+              icon="edit"
+              aria-label="Edit wrestler"
+              @click.stop="openEdit(wrestler)"
             />
-            <q-btn dense flat icon="edit" aria-label="Edit wrestler" @click="openEdit(wrestler)" />
             <q-btn
               dense
               flat
               icon="delete"
               color="negative"
               aria-label="Remove wrestler"
-              @click="confirmDelete(wrestler)"
+              @click.stop="confirmDelete(wrestler)"
             />
           </div>
         </q-item-section>
@@ -362,12 +371,13 @@ function squadOf(wrestler: Wrestler): string {
   align-items: center;
 }
 
-/* Reads as a value, not a button, until you go near it. */
-.record-btn {
+/* A value rather than a control: the whole row is the control now. */
+.record-value {
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 0.95rem;
   color: var(--navy-800);
   min-width: 52px;
+  text-align: right;
 }
 </style>

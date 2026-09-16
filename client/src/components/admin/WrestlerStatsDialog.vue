@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { date as qdate } from 'quasar'
 import { useMatchesStore } from 'stores/matches'
+import MatchEditDialog from 'components/admin/MatchEditDialog.vue'
 import { reconcile } from 'src/utils/matchScoring'
 import {
   nearFallTotal,
@@ -15,6 +16,14 @@ const props = defineProps<{
   modelValue: boolean
   wrestler: Wrestler | null
 }>()
+
+const editOpen = ref(false)
+const editing = ref<Match | null>(null)
+
+function openEdit(match: Match) {
+  editing.value = match
+  editOpen.value = true
+}
 
 const emit = defineEmits<{ (e: 'update:modelValue', open: boolean): void }>()
 
@@ -119,8 +128,19 @@ function flag(match: Match): string {
           Nothing recorded yet.
         </div>
 
+        <!-- Every bout is a button. A wrong result is the thing most worth
+             fixing here, and it is the thing you are already looking at. -->
         <ul v-else class="bout-list">
-          <li v-for="bout in bouts" :key="bout.id" class="bout">
+          <li
+            v-for="bout in bouts"
+            :key="bout.id"
+            class="bout"
+            role="button"
+            tabindex="0"
+            @click="openEdit(bout)"
+            @keydown.enter="openEdit(bout)"
+            @keydown.space.prevent="openEdit(bout)"
+          >
             <div class="bout__main">
               <span class="bout__result" :class="{
                 'bout__result--win': bout.result === 'win' && bout.winType !== 'bye',
@@ -144,6 +164,8 @@ function flag(match: Match): string {
         <q-btn v-close-popup flat no-caps label="Close" />
       </q-card-actions>
     </q-card>
+
+    <MatchEditDialog v-model="editOpen" :match="editing" />
   </q-dialog>
 </template>
 
@@ -244,13 +266,26 @@ function flag(match: Match): string {
 }
 
 .bout {
-  padding: 8px 0;
+  padding: 8px;
+  margin: 0 -8px;
   border-top: 1px solid var(--grey-200);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.bout:hover {
+  background: var(--grey-050, #fafafa);
+}
+
+/* A ring, not just a tint: the tint alone is too faint to find with a keyboard. */
+.bout:focus-visible {
+  background: var(--grey-050, #fafafa);
+  outline: 2px solid var(--navy-800);
+  outline-offset: -2px;
 }
 
 .bout:first-child {
   border-top: none;
-  padding-top: 0;
 }
 
 .bout__main {

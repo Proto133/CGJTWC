@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useMatchesStore } from 'stores/matches'
 import { useWrestlersStore } from 'stores/wrestlers'
+import MatchEditDialog from 'components/admin/MatchEditDialog.vue'
 import { eventTeamPoints, resultLabel } from 'src/utils/wrestlerStats'
 import type { Event, Match } from 'src/types'
 
@@ -46,6 +47,14 @@ const points = computed(() => eventTeamPoints(bouts.value))
 function score(match: Match): string {
   if (typeof match.officialFor !== 'number') return ''
   return `${match.officialFor}\u2013${match.officialAgainst ?? 0}`
+}
+
+const editOpen = ref(false)
+const editing = ref<Match | null>(null)
+
+function openEdit(match: Match) {
+  editing.value = match
+  editOpen.value = true
 }
 </script>
 
@@ -94,8 +103,19 @@ function score(match: Match): string {
           No bouts recorded for this event yet.
         </div>
 
+        <!-- Same as the roster view: tapping a bout opens it for correction,
+             because this is where a wrong entry gets noticed. -->
         <ul v-else class="bout-list">
-          <li v-for="bout in bouts" :key="bout.id" class="bout">
+          <li
+            v-for="bout in bouts"
+            :key="bout.id"
+            class="bout"
+            role="button"
+            tabindex="0"
+            @click="openEdit(bout)"
+            @keydown.enter="openEdit(bout)"
+            @keydown.space.prevent="openEdit(bout)"
+          >
             <div class="bout__name">{{ nameOf(bout) }}</div>
             <div class="bout__detail">
               <span :class="{
@@ -113,6 +133,8 @@ function score(match: Match): string {
         <q-btn v-close-popup flat no-caps label="Close" />
       </q-card-actions>
     </q-card>
+
+    <MatchEditDialog v-model="editOpen" :match="editing" />
   </q-dialog>
 </template>
 
@@ -178,13 +200,26 @@ function score(match: Match): string {
 }
 
 .bout {
-  padding: 8px 0;
+  padding: 8px;
+  margin: 0 -8px;
   border-top: 1px solid var(--grey-200);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.bout:hover {
+  background: var(--grey-050, #fafafa);
+}
+
+/* A ring, not just a tint: the tint alone is too faint to find with a keyboard. */
+.bout:focus-visible {
+  background: var(--grey-050, #fafafa);
+  outline: 2px solid var(--navy-800);
+  outline-offset: -2px;
 }
 
 .bout:first-child {
   border-top: none;
-  padding-top: 0;
 }
 
 .bout__name {

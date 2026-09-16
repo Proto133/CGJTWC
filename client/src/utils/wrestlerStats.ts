@@ -146,6 +146,24 @@ export function winTypeLabel(winType: MatchWinType): string {
   return WIN_TYPE_LABELS[winType] ?? winType
 }
 
+/**
+ * Full names for a select, kept apart from the labels above.
+ *
+ * A bout list needs "Pin" to fit on one line next to a score; a dropdown asking
+ * how the bout ended needs the term as the bracket writes it. Same values, two
+ * audiences, so two maps rather than one compromise.
+ */
+export const WIN_TYPE_OPTIONS: { label: string; value: MatchWinType }[] = [
+  { label: 'Decision', value: 'decision' },
+  { label: 'Major decision', value: 'majorDecision' },
+  { label: 'Technical fall', value: 'techFall' },
+  { label: 'Fall', value: 'fall' },
+  { label: 'Forfeit', value: 'forfeit' },
+  { label: 'Injury default', value: 'injuryDefault' },
+  { label: 'Disqualification', value: 'disqualification' },
+  { label: 'Bye', value: 'bye' },
+]
+
 /** "W by pin", "L by decision" — how a result reads on a bracket. */
 export function resultLabel(match: Pick<Match, 'result' | 'winType'>): string {
   if (match.winType === 'bye') return 'Bye'
