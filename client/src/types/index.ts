@@ -695,9 +695,21 @@ export type MatchEventType =
   | 'nearFall4'
   | 'penalty1'
   | 'penalty2'
-  /** Recorded but scores nothing. It is the sequence that matters. */
+  /*
+   * Stalling runs on its own chart, separate from the penalty progression
+   * above, and is cumulative across the whole bout: warning, 1, 1, 2, then
+   * disqualification. Each rung is its own type so the value stays in the name
+   * rather than being inferred from position in the log, which would let a
+   * deleted or reordered call silently reprice every stall after it.
+   */
+  /** First call. Recorded but scores nothing; it is the sequence that matters. */
   | 'stallWarning'
+  /** Second and third. */
   | 'stallPoint'
+  /** Fourth. Match stops and the opponent chooses position on the restart. */
+  | 'stallPoint2'
+  /** Fifth. Ends the bout by disqualification and scores nothing itself. */
+  | 'stallDq'
 
 export interface MatchEvent {
   type: MatchEventType

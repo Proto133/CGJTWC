@@ -47,6 +47,10 @@ const POINTS: Record<MatchEventType, number> = {
   // infraction costs, but it puts nothing on the board.
   stallWarning: 0,
   stallPoint: 1,
+  stallPoint2: 2,
+  // The fifth ends the bout rather than scoring. Recorded so the count is
+  // complete and the disqualification has something behind it.
+  stallDq: 0,
 }
 
 /**
@@ -60,10 +64,69 @@ const INFRACTIONS: ReadonlySet<MatchEventType> = new Set<MatchEventType>([
   'penalty2',
   'stallWarning',
   'stallPoint',
+  'stallPoint2',
+  'stallDq',
+])
+
+const STALLS: ReadonlySet<MatchEventType> = new Set<MatchEventType>([
+  'stallWarning',
+  'stallPoint',
+  'stallPoint2',
+  'stallDq',
 ])
 
 /** Folkstyle technical superiority. A rules value, not a constant. */
 export const TECH_FALL_MARGIN = 15
+
+/**
+ * The NFHS stalling chart (7-6, 8-1-4), in order.
+ *
+ * Stalling was taken out of the general penalty progression so officials could
+ * call it earlier without it interacting with other infractions, so it is
+ * counted and priced entirely on its own. Warnings and penalties are
+ * cumulative across the whole bout, not per period.
+ */
+const STALL_SEQUENCE: readonly MatchEventType[] = [
+  'stallWarning',
+  'stallPoint',
+  'stallPoint',
+  'stallPoint2',
+  'stallDq',
+]
+
+/** The fifth call disqualifies. Worth naming, because the UI counts up to it. */
+export const STALL_DQ_AT = STALL_SEQUENCE.length
+
+/** Plain-language consequence of the next call, by rung. */
+const STALL_CONSEQUENCES: readonly string[] = [
+  'Warning',
+  '1 point',
+  '1 point',
+  '2 points',
+  'Disqualification',
+]
+
+/**
+ * The call the next stall on a wrestler produces, from how many they already
+ * have.
+ *
+ * Clamped rather than thrown past the fifth: the bout ends there, and a stray
+ * tap on a finished bout should not be an exception.
+ */
+export function nextStallCall(priorStalls: number): MatchEventType {
+  const index = Math.min(Math.max(priorStalls, 0), STALL_SEQUENCE.length - 1)
+  return STALL_SEQUENCE[index] as MatchEventType
+}
+
+export function stallConsequence(priorStalls: number): string {
+  const index = Math.min(Math.max(priorStalls, 0), STALL_CONSEQUENCES.length - 1)
+  return STALL_CONSEQUENCES[index] as string
+}
+
+/** Stalls called on one wrestler. `side` is the offender, as recorded. */
+export function stallCount(events: MatchEvent[], side: 'wrestler' | 'opponent'): number {
+  return events.filter((e) => e.side === side && STALLS.has(e.type)).length
+}
 
 /** NFHS dual-meet team points, which IKWF adopts wholesale. */
 const TEAM_POINTS: Record<MatchWinType, number> = {
@@ -141,7 +204,9 @@ export function countsFromEvents(
       case 'penalty1':
       case 'penalty2': counts.penalties += 1; break
       case 'stallWarning':
-      case 'stallPoint': counts.stalls += 1; break
+      case 'stallPoint':
+      case 'stallPoint2':
+      case 'stallDq': counts.stalls += 1; break
     }
   }
 

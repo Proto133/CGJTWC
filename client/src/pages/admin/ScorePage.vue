@@ -5,7 +5,11 @@ import { useWrestlersStore } from 'stores/wrestlers'
 import { useMatchesStore } from 'stores/matches'
 import { useEventsStore } from 'stores/events'
 import {
+  STALL_DQ_AT,
+  nextStallCall,
   scoreFromEvents,
+  stallConsequence,
+  stallCount,
   suggestWinType,
   undoLast,
 } from 'src/utils/matchScoring'
@@ -62,6 +66,8 @@ const winType = ref<MatchWinType>('decision')
 const result = ref<'win' | 'loss'>('win')
 const officialFor = ref<number | null>(null)
 const officialAgainst = ref<number | null>(null)
+/** Why the bout ended, when it ended itself rather than being ended by hand. */
+const finishNote = ref('')
 
 onMounted(() => {
   wrestlersStore.subscribe()
@@ -173,14 +179,54 @@ const CALLS: { type: MatchEventType; label: string; hint: string }[] = [
 
 /** Called on the offender, which is how the official says it. */
 const INFRACTION_CALLS: { type: MatchEventType; label: string; hint: string }[] = [
-  { type: 'stallWarning', label: 'Stall', hint: 'Warning, no points' },
-  { type: 'stallPoint', label: 'Stall pt', hint: 'Stalling point' },
   { type: 'penalty1', label: 'P1', hint: 'Penalty, 1' },
   { type: 'penalty2', label: 'P2', hint: 'Penalty, 2' },
 ]
 
 function record(type: MatchEventType, side: 'wrestler' | 'opponent') {
   events.value = [...events.value, { type, side, period: period.value }]
+}
+
+// ---------------------------------------------------------------------------
+// Stalling
+// ---------------------------------------------------------------------------
+
+/**
+ * One button per side rather than one per rung.
+ *
+ * Stalling is priced by how many that wrestler already has, and a scorer
+ * tracking that in their head while watching the mat will get it wrong. The
+ * official calls "stalling" and nothing else, so that is what the button says;
+ * which rung it lands on is worked out here.
+ */
+const stalls = computed(() => ({
+  wrestler: stallCount(events.value, 'wrestler'),
+  opponent: stallCount(events.value, 'opponent'),
+}))
+
+const PIPS = Array.from({ length: STALL_DQ_AT }, (_, i) => i + 1)
+
+function recordStall(side: 'wrestler' | 'opponent') {
+  const prior = stalls.value[side]
+  // Already disqualified. The bout is over; further taps are noise.
+  if (prior >= STALL_DQ_AT) return
+
+  record(nextStallCall(prior), side)
+
+  if (prior + 1 >= STALL_DQ_AT) endByStalling(side)
+}
+
+/** The fifth call ends the bout, so the finish screen opens already filled in. */
+function endByStalling(offender: 'wrestler' | 'opponent') {
+  const derived = score.value
+  officialFor.value = derived.for
+  officialAgainst.value = derived.against
+  result.value = offender === 'wrestler' ? 'loss' : 'win'
+  winType.value = 'disqualification'
+  finishNote.value = offender === 'wrestler'
+    ? `Fifth stalling call on ${wrestlerName.value || 'our wrestler'} \u2014 disqualified.`
+    : 'Fifth stalling call on the opponent \u2014 disqualified.'
+  stage.value = 'finish'
 }
 
 function undo() {
@@ -215,6 +261,7 @@ function backPeriod() {
 
 function endMatch() {
   const derived = score.value
+  finishNote.value = ''
   // Prefilled from the tally so the common case is one tap, but every field
   // stays editable because the table's sheet is what counts.
   officialFor.value = derived.for
@@ -269,6 +316,7 @@ function reset() {
   round.value = ''
   officialFor.value = null
   officialAgainst.value = null
+  finishNote.value = ''
 }
 
 function discard() {
@@ -371,11 +419,42 @@ useMeta({ title: 'Score a bout' })
             <div class="score-side__band">{{ ourBand }}</div>
             <div class="score-side__name">{{ wrestlerName }}</div>
             <div class="score-side__num">{{ score.for }}</div>
+            <!-- Five pips, because the fifth stalling call disqualifies. The
+                 last one is drawn apart and in red: it is not another point,
+                 it ends the bout. -->
+            <div
+              class="pips"
+              :aria-label="`${stalls.wrestler} of ${STALL_DQ_AT} stalling calls`"
+            >
+              <span
+                v-for="n in PIPS"
+                :key="`us-${n}`"
+                class="pip"
+                :class="{
+                  'pip--on': stalls.wrestler >= n,
+                  'pip--last': n === STALL_DQ_AT,
+                }"
+              />
+            </div>
           </div>
           <div class="score-side" :class="`score-side--${theirBand}`">
             <div class="score-side__band">{{ theirBand }}</div>
             <div class="score-side__name">{{ opponentName || 'Opponent' }}</div>
             <div class="score-side__num">{{ score.against }}</div>
+            <div
+              class="pips"
+              :aria-label="`${stalls.opponent} of ${STALL_DQ_AT} stalling calls`"
+            >
+              <span
+                v-for="n in PIPS"
+                :key="`them-${n}`"
+                class="pip"
+                :class="{
+                  'pip--on': stalls.opponent >= n,
+                  'pip--last': n === STALL_DQ_AT,
+                }"
+              />
+            </div>
           </div>
         </div>
         <div class="score-head__period">
@@ -428,6 +507,40 @@ useMeta({ title: 'Score a bout' })
            buttons that do NOT score for the colour they sit under. Tap them on
            the offender, as the official calls it; the point goes the other way. -->
       <div class="call-note">Infractions — tap on the offender, the point goes the other way</div>
+
+      <!-- One stall button per side. What it costs is worked out from the count
+           and shown under the label, so the scorer never has to remember the
+           chart mid-bout. -->
+      <div class="call-grid call-grid--small">
+        <button
+          type="button"
+          class="call-btn call-btn--infraction stall-btn"
+          :class="[
+            `call-btn--on-${ourBand}`,
+            { 'stall-btn--final': stalls.wrestler === STALL_DQ_AT - 1 },
+          ]"
+          :disabled="stalls.wrestler >= STALL_DQ_AT"
+          :aria-label="`Stalling on ${ourBand}: ${stallConsequence(stalls.wrestler)}`"
+          @click="recordStall('wrestler')"
+        >
+          Stall
+          <span class="stall-btn__next">{{ stallConsequence(stalls.wrestler) }}</span>
+        </button>
+        <button
+          type="button"
+          class="call-btn call-btn--infraction stall-btn"
+          :class="[
+            `call-btn--on-${theirBand}`,
+            { 'stall-btn--final': stalls.opponent === STALL_DQ_AT - 1 },
+          ]"
+          :disabled="stalls.opponent >= STALL_DQ_AT"
+          :aria-label="`Stalling on ${theirBand}: ${stallConsequence(stalls.opponent)}`"
+          @click="recordStall('opponent')"
+        >
+          Stall
+          <span class="stall-btn__next">{{ stallConsequence(stalls.opponent) }}</span>
+        </button>
+      </div>
       <div class="call-grid call-grid--small">
         <div class="call-col">
           <button
@@ -485,6 +598,9 @@ useMeta({ title: 'Score a bout' })
     <!-- FINISH -->
     <section v-else class="score-finish">
       <h1 class="score-title">Finish bout</h1>
+      <p v-if="finishNote" class="score-reason">
+        <q-icon name="gavel" size="16px" class="q-mr-xs" />{{ finishNote }}
+      </p>
       <p class="score-sub">
         {{ wrestlerName }} vs {{ opponentName || 'opponent' }} — our tally says
         {{ score.for }}–{{ score.against }}.
@@ -731,6 +847,43 @@ useMeta({ title: 'Score a bout' })
   line-height: 1;
 }
 
+/* Stalling count ---------------------------------------------------------
+ *
+ * Sits under the score because that is where the eye already is, and because
+ * the count matters most in the moment when the score does.
+ */
+.pips {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  min-height: 12px;
+}
+
+.pip {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+}
+
+.pip--on {
+  background: #fff;
+  border-color: #fff;
+}
+
+/* The fifth is set apart and outlined in red, filled or not: it is not another
+   point on the board, it is the end of the bout. */
+.pip--last {
+  margin-left: 5px;
+  border-color: var(--band-red-ink);
+}
+
+.pip--last.pip--on {
+  background: var(--band-red-ink);
+}
+
 .score-head__period {
   display: flex;
   align-items: center;
@@ -804,6 +957,38 @@ useMeta({ title: 'Score a bout' })
   color: var(--band-green-ink);
 }
 
+.call-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* Stalling -------------------------------------------------------------- */
+
+.stall-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  line-height: 1.1;
+}
+
+/* What the next call costs, read straight off the chart. */
+.stall-btn__next {
+  font-family: var(--font-body, inherit);
+  font-weight: 400;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+/* One more ends it. Worth shouting about before it is tapped, not after. */
+.stall-btn--final {
+  border-color: var(--band-red-ink);
+  color: var(--band-red-ink);
+  background: rgba(198, 36, 49, 0.18);
+}
+
 .call-grid--small {
   margin-top: 6px;
 }
@@ -835,5 +1020,13 @@ useMeta({ title: 'Score a bout' })
   font-size: 0.84rem;
   line-height: 1.5;
   color: #ffd27a;
+}
+
+.score-reason {
+  display: flex;
+  align-items: center;
+  margin: -8px 0 12px;
+  font-size: 0.9rem;
+  color: var(--band-red-ink);
 }
 </style>
