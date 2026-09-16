@@ -1,13 +1,17 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onBeforeUnmount, onMounted } from 'vue'
 import { Dialog, date as qdate } from 'quasar'
 import { useEventsStore } from 'stores/events'
+import { useMatchesStore } from 'stores/matches'
+import { useWrestlersStore } from 'stores/wrestlers'
+import EventResultsDialog from 'components/admin/EventResultsDialog.vue'
 import EventForm from 'components/admin/EventForm.vue'
 import EventImportDialog from 'components/admin/EventImportDialog.vue'
 import EventBulkEditDialog from 'components/admin/EventBulkEditDialog.vue'
 import { eventSquads, matchesGroupFilter } from 'src/utils/eventGroups'
 import { formatEventTime } from 'src/utils/eventTimes'
 import { groupByMonth } from 'src/utils/eventPeriods'
+import { currentSeason } from 'src/utils/season'
 import type { Event, EventFormPayload, EventType } from 'src/types'
 
 /**
@@ -19,6 +23,31 @@ import type { Event, EventFormPayload, EventType } from 'src/types'
  */
 
 const store = useEventsStore()
+const matchesStore = useMatchesStore()
+const wrestlersStore = useWrestlersStore()
+
+// Results are read here as well as on the roster, so both are subscribed.
+onMounted(() => {
+  matchesStore.subscribeSeason(currentSeason())
+  wrestlersStore.subscribe()
+})
+onBeforeUnmount(() => {
+  matchesStore.unsubscribeFromMatches()
+  wrestlersStore.unsubscribeFromWrestlers()
+})
+
+const resultsOpen = ref(false)
+const resultsFor = ref<Event | null>(null)
+
+function openResults(event: Event) {
+  resultsFor.value = event
+  resultsOpen.value = true
+}
+
+/** How many bouts are on file for an event, so the button is worth pressing. */
+function boutCount(eventId: string): number {
+  return matchesStore.forEvent(eventId).length
+}
 
 const showForm = ref(false)
 const editing = ref<Partial<Event> | null>(null)
@@ -363,7 +392,19 @@ function formatDay(event: Event) {
               </q-item-label>
             </q-item-section>
             <q-item-section side>
-              <div class="q-gutter-xs">
+              <div class="row items-center q-gutter-xs">
+                <!-- Only for events that can have results. A practice has none. -->
+                <q-btn
+                  v-if="event.type !== 'practice'"
+                  dense
+                  flat
+                  no-caps
+                  size="sm"
+                  icon="leaderboard"
+                  :label="boutCount(event.id) > 0 ? String(boutCount(event.id)) : ''"
+                  :aria-label="`Results for ${event.title}`"
+                  @click="openResults(event)"
+                />
                 <q-btn dense flat icon="edit" aria-label="Edit event" @click="openEdit(event)" />
                 <q-btn
                   dense
@@ -379,6 +420,8 @@ function formatDay(event: Event) {
         </template>
       </q-list>
     </template>
+
+    <EventResultsDialog v-model="resultsOpen" :event="resultsFor" />
 
     <EventImportDialog v-model="importOpen" />
     <EventBulkEditDialog

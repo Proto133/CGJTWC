@@ -2,7 +2,10 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Dialog } from 'quasar'
 import { useWrestlersStore } from 'stores/wrestlers'
+import { useMatchesStore } from 'stores/matches'
+import WrestlerStatsDialog from 'components/admin/WrestlerStatsDialog.vue'
 import { currentSeason, divisionLabel, ikwfDivision, squadForDivision } from 'src/utils/season'
+import { recordLabel, summarise } from 'src/utils/wrestlerStats'
 import { parseStoredDate } from 'src/utils/usDate'
 import type { Wrestler, WrestlerPrivate } from 'src/types'
 
@@ -15,7 +18,21 @@ import type { Wrestler, WrestlerPrivate } from 'src/types'
  */
 
 const store = useWrestlersStore()
+const matchesStore = useMatchesStore()
 const season = currentSeason()
+
+const statsOpen = ref(false)
+const statsFor = ref<Wrestler | null>(null)
+
+function openStats(wrestler: Wrestler) {
+  statsFor.value = wrestler
+  statsOpen.value = true
+}
+
+/** Season record, computed from the bouts already in memory. */
+function record(wrestler: Wrestler): string {
+  return recordLabel(summarise(matchesStore.forWrestler(wrestler.id)))
+}
 
 const showForm = ref(false)
 const editingId = ref<string | null>(null)
@@ -50,8 +67,14 @@ function blankForm(): FormState {
 
 const form = ref<FormState>(blankForm())
 
-onMounted(() => store.subscribe())
-onBeforeUnmount(() => store.unsubscribeFromWrestlers())
+onMounted(() => {
+  store.subscribe()
+  matchesStore.subscribeSeason(season)
+})
+onBeforeUnmount(() => {
+  store.unsubscribeFromWrestlers()
+  matchesStore.unsubscribeFromMatches()
+})
 
 const dobInvalid = computed(() =>
   form.value.dob.trim() !== '' && parseStoredDate(form.value.dob) === null)
@@ -287,7 +310,16 @@ function squadOf(wrestler: Wrestler): string {
         </q-item-section>
 
         <q-item-section side>
-          <div class="q-gutter-xs">
+          <div class="row items-center q-gutter-xs">
+            <q-btn
+              dense
+              flat
+              no-caps
+              :label="record(wrestler)"
+              :aria-label="`${wrestler.firstName}'s season record`"
+              class="record-btn"
+              @click="openStats(wrestler)"
+            />
             <q-btn dense flat icon="edit" aria-label="Edit wrestler" @click="openEdit(wrestler)" />
             <q-btn
               dense
@@ -301,6 +333,8 @@ function squadOf(wrestler: Wrestler): string {
         </q-item-section>
       </q-item>
     </q-list>
+
+    <WrestlerStatsDialog v-model="statsOpen" :wrestler="statsFor" />
   </div>
 </template>
 
@@ -326,5 +360,14 @@ function squadOf(wrestler: Wrestler): string {
   color: var(--navy-800);
   display: flex;
   align-items: center;
+}
+
+/* Reads as a value, not a button, until you go near it. */
+.record-btn {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--navy-800);
+  min-width: 52px;
 }
 </style>
