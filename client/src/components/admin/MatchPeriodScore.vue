@@ -28,6 +28,8 @@ const props = defineProps<{
   winType: MatchWinType
   officialFor?: number | undefined
   officialAgainst?: number | undefined
+  fallPeriod?: number | undefined
+  fallTime?: string | undefined
 }>()
 
 const columns = computed(() => periodBreakdown(props.events))
@@ -78,6 +80,29 @@ const key = computed(() => {
 
 const winner = computed(() => (props.result === 'win' ? props.ourName : props.theirName))
 
+/**
+ * Where the fall goes.
+ *
+ * A fall is not a call in the log — it is how the bout stopped — so it is not
+ * in the breakdown and gets placed here instead. It belongs in the period it
+ * happened in, on the line of the wrestler who got it, which is how a sheet
+ * records it: F and the time left.
+ *
+ * Only shown when the period is known. Bouts recorded before that was asked
+ * for have the result but nowhere to put it, and a fall parked in the wrong
+ * period would be worse than the line underneath simply saying "won by pin".
+ */
+const fallSide = computed<'wrestler' | 'opponent' | null>(() => {
+  if (props.winType !== 'fall' || !props.fallPeriod) return null
+  return props.result === 'win' ? 'wrestler' : 'opponent'
+})
+
+function showsFall(period: number, side: 'wrestler' | 'opponent'): boolean {
+  return fallSide.value === side && props.fallPeriod === period
+}
+
+const fallMark = computed(() => (props.fallTime ? `F ${props.fallTime}` : 'F'))
+
 const resultLine = computed(() => {
   if (props.winType === 'bye') return 'Bye — not wrestled.'
   return `${winner.value} won by ${winTypeLabel(props.winType).toLowerCase()}.`
@@ -123,7 +148,15 @@ const officialDiffers = computed(() => {
                 :class="{ 'call--free': mark.points === 0 }"
                 :title="markTitle(mark)"
               >{{ markLabel(mark) }}</span>
-              <span v-if="column.wrestler.length === 0" class="call__none">—</span>
+              <span
+                v-if="showsFall(column.period, 'wrestler')"
+                class="call call--fall"
+                :title="`Fall with ${fallTime} left in ${periodName(column.period)}`"
+              >{{ fallMark }}</span>
+              <span
+                v-if="column.wrestler.length === 0 && !showsFall(column.period, 'wrestler')"
+                class="call__none"
+              >—</span>
             </td>
             <td class="sheet__total">{{ derived.for }}</td>
           </tr>
@@ -137,7 +170,15 @@ const officialDiffers = computed(() => {
                 :class="{ 'call--free': mark.points === 0 }"
                 :title="markTitle(mark)"
               >{{ markLabel(mark) }}</span>
-              <span v-if="column.opponent.length === 0" class="call__none">—</span>
+              <span
+                v-if="showsFall(column.period, 'opponent')"
+                class="call call--fall"
+                :title="`Fall with ${fallTime} left in ${periodName(column.period)}`"
+              >{{ fallMark }}</span>
+              <span
+                v-if="column.opponent.length === 0 && !showsFall(column.period, 'opponent')"
+                class="call__none"
+              >—</span>
             </td>
             <td class="sheet__total">{{ derived.against }}</td>
           </tr>
@@ -237,6 +278,14 @@ const officialDiffers = computed(() => {
   background: transparent;
   border-color: var(--grey-300);
   color: var(--grey-500);
+}
+
+/* Neither a call nor a point, but the moment the bout stopped, so it is
+   neither filled navy nor outlined grey. */
+.call--fall {
+  background: var(--gold-500, #d4a017);
+  color: var(--navy-800, #10233f);
+  white-space: nowrap;
 }
 
 .call__none {

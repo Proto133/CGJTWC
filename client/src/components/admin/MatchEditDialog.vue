@@ -274,6 +274,8 @@ function confirmDelete() {
             :win-type="match.winType"
             :official-for="match.officialFor"
             :official-against="match.officialAgainst"
+            :fall-period="match.fallPeriod"
+            :fall-time="match.fallTime"
           />
           <div class="detail-locked q-mt-md">
             Scored live, so the calls above are the record and are not editable
