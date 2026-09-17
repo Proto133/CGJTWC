@@ -658,6 +658,7 @@ export interface WrestlerPrivate {
   guardianPhone?: string
   emergencyName?: string
   emergencyPhone?: string
+  emergencyRelationship?: string
   notes?: string
   /** Provenance only. Registrations are meant to be deleted, so nothing reads through it. */
   sourceRegistrationId?: string

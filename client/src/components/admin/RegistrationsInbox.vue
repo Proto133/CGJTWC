@@ -2,16 +2,46 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Dialog, date, copyToClipboard, Notify } from 'quasar'
 import { useRegistrationsStore } from 'stores/registrations'
+import { useWrestlersStore } from 'stores/wrestlers'
 import { registrationWrestlers, wrestlerNames, toUsDate } from 'src/utils/registration'
+import { nameMatches } from 'src/utils/registrantConversion'
 import PaymentDialog from 'components/admin/PaymentDialog.vue'
+import ConvertRegistrantDialog from 'components/admin/ConvertRegistrantDialog.vue'
 import type {
   Registration,
   RegistrationStatus,
+  RegistrationWrestler,
   PaymentStatus,
   PaymentConfirmationInput,
 } from 'src/types'
 
 const store = useRegistrationsStore()
+const wrestlersStore = useWrestlersStore()
+
+// ---------------------------------------------------------------------------
+// Registrant to wrestler
+// ---------------------------------------------------------------------------
+
+const convertOpen = ref(false)
+const convertReg = ref<Registration | null>(null)
+const convertRegistrant = ref<RegistrationWrestler | null>(null)
+
+function openConvert(reg: Registration, w: RegistrationWrestler) {
+  convertReg.value = reg
+  convertRegistrant.value = w
+  convertOpen.value = true
+}
+
+/**
+ * Whether this child looks like they are already on the roster.
+ *
+ * Name only, which is all the public half of a wrestler holds. It is a hint to
+ * stop an admin opening the dialog for someone already enrolled, not the
+ * decision — the dialog checks dates of birth before it will write anything.
+ */
+function onRoster(w: RegistrationWrestler): boolean {
+  return nameMatches(wrestlersStore.wrestlers, w).length > 0
+}
 
 const statusFilter = ref<RegistrationStatus | 'all'>('all')
 const paymentFilter = ref<PaymentStatus | 'all'>('all')
@@ -154,11 +184,16 @@ function endPrint() {
 
 // afterprint fires whether the dialog was confirmed or cancelled, which is the
 // only reliable signal that printing is over.
-onMounted(() => window.addEventListener('afterprint', endPrint))
+onMounted(() => {
+  window.addEventListener('afterprint', endPrint)
+  // The roster is read here only to tell which registrants are already on it.
+  wrestlersStore.subscribe()
+})
 onBeforeUnmount(() => {
   window.removeEventListener('afterprint', endPrint)
   // Leaving the tab mid-print would otherwise strand the body class.
   endPrint()
+  wrestlersStore.unsubscribeFromWrestlers()
 })
 
 const counts = computed(() => ({
@@ -347,13 +382,30 @@ const namesOf = wrestlerNames
                 :key="i"
                 class="wrestler-detail"
               >
-                <div class="text-weight-medium">{{ w.firstName }} {{ w.lastName }}</div>
+                <div class="row items-center q-gutter-xs">
+                  <span class="text-weight-medium">{{ w.firstName }} {{ w.lastName }}</span>
+                  <q-badge v-if="onRoster(w)" outline color="positive" label="on roster" />
+                </div>
                 <div>Born {{ usDate(w.dob) }} · Grade {{ w.grade }}</div>
                 <div v-if="w.yearsExperience">Experience: {{ w.yearsExperience }}</div>
                 <div v-if="w.previousClub">Previous club: {{ w.previousClub }}</div>
                 <!-- Only on registrations taken while the question existed. -->
                 <div v-if="w.siblingName">Sibling: {{ w.siblingName }}</div>
                 <div v-if="w.usawNumber">USAW #{{ w.usawNumber }}</div>
+
+                <!-- Per child rather than per family: siblings are routinely in
+                     different situations, one returning and one new. -->
+                <q-btn
+                  dense
+                  flat
+                  no-caps
+                  size="sm"
+                  color="primary"
+                  icon="person_add"
+                  :label="onRoster(w) ? 'Review on roster' : 'Add to roster'"
+                  class="convert-btn"
+                  @click="openConvert(reg, w)"
+                />
               </div>
             </div>
             <div class="col-12 col-sm-6">
@@ -570,6 +622,12 @@ const namesOf = wrestlerNames
       :loading="store.working === editingPayment?.id"
       @save="savePayment"
     />
+
+    <ConvertRegistrantDialog
+      v-model="convertOpen"
+      :registration="convertReg"
+      :registrant="convertRegistrant"
+    />
   </div>
 </template>
 
@@ -583,6 +641,12 @@ const namesOf = wrestlerNames
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px dashed var(--grey-200, #e5e7eb);
+}
+
+/* Pulled left of the text it belongs to so it reads as this child's action
+   rather than the panel's. */
+.convert-btn {
+  margin: 4px 0 0 -6px;
 }
 .privacy-banner {
   display: flex;
