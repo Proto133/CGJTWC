@@ -40,6 +40,10 @@ const EVENT_LABELS: Record<MatchEventType, string> = {
   caution: 'C',
   /** The point earned after a second caution, exactly as the legend has it. */
   cautionPoint: 'C1',
+  chooseUp: '\u25B2',
+  chooseDown: '\u25BC',
+  chooseNeutral: '=',
+  defer: 'D',
 }
 
 /** Full names, for the box score, where being unambiguous matters more. */
@@ -58,6 +62,10 @@ const EVENT_NAMES: Record<MatchEventType, string> = {
   stallDq: 'Stalling, disqualification',
   caution: 'Caution',
   cautionPoint: 'Caution, 1',
+  chooseUp: 'Selects up',
+  chooseDown: 'Selects down',
+  chooseNeutral: 'Selects neutral',
+  defer: 'Defers',
 }
 
 export function eventLabel(type: MatchEventType): string {

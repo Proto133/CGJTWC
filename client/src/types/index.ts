@@ -720,6 +720,19 @@ export type MatchEventType =
   | 'caution'
   /** Third onwards. */
   | 'cautionPoint'
+  /*
+   * Position choice at the start of a period. Not a call and worth nothing,
+   * but part of a scoresheet: who had choice and what they took explains the
+   * shape of the period that follows.
+   *
+   * Recorded against the period it governs rather than the one it was made at
+   * the end of, so the mark sits in the column it belongs to.
+   */
+  | 'chooseUp'
+  | 'chooseDown'
+  | 'chooseNeutral'
+  /** Hands the choice over, and takes the next period's choice in exchange. */
+  | 'defer'
 
 export interface MatchEvent {
   type: MatchEventType

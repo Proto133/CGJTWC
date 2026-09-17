@@ -53,6 +53,11 @@ const POINTS: Record<MatchEventType, number> = {
   stallDq: 0,
   caution: 0,
   cautionPoint: 1,
+  // Choices are recorded, never scored.
+  chooseUp: 0,
+  chooseDown: 0,
+  chooseNeutral: 0,
+  defer: 0,
 }
 
 /**
@@ -88,6 +93,48 @@ const CAUTIONS: ReadonlySet<MatchEventType> = new Set<MatchEventType>([
   'caution',
   'cautionPoint',
 ])
+
+const CHOICES: ReadonlySet<MatchEventType> = new Set<MatchEventType>([
+  'chooseUp',
+  'chooseDown',
+  'chooseNeutral',
+  'defer',
+])
+
+export function isChoice(type: MatchEventType): boolean {
+  return CHOICES.has(type)
+}
+
+/**
+ * Who picks the position at the start of a period, worked out from the log.
+ *
+ * Only the third period can be inferred. The second belongs to whoever won the
+ * toss, which happened before the bout started and is nowhere in the log, so
+ * that one has to be asked.
+ *
+ * By the third it follows from the rules: choice alternates, unless the
+ * wrestler who had it at the second deferred, in which case they kept it for
+ * the third and that is exactly what deferring buys.
+ *
+ * Returns null when nothing was recorded for the second period, rather than
+ * guessing — a scorer who skipped the question should be asked again, not have
+ * an answer invented for them.
+ */
+export function chooserFor(
+  events: MatchEvent[],
+  period: number,
+): 'wrestler' | 'opponent' | null {
+  if (period !== 3) return null
+
+  const second = events.filter((e) => e.period === 2 && CHOICES.has(e.type))
+
+  const deferred = second.find((e) => e.type === 'defer')
+  if (deferred) return deferred.side
+
+  const took = second.find((e) => e.type !== 'defer')
+  if (!took) return null
+  return took.side === 'wrestler' ? 'opponent' : 'wrestler'
+}
 
 /** Folkstyle technical superiority. A rules value, not a constant. */
 export const TECH_FALL_MARGIN = 15

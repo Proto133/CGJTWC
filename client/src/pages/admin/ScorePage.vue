@@ -9,6 +9,7 @@ import {
   cautionConsequence,
   cautionConsequenceShort,
   cautionCount,
+  isChoice,
   isInfraction,
   nextCautionCall,
   nextStallCall,
@@ -21,6 +22,7 @@ import {
 } from 'src/utils/matchScoring'
 import { WIN_TYPE_OPTIONS, eventLabel, eventName } from 'src/utils/matchLabels'
 import BoxScoreDialog from 'components/admin/BoxScoreDialog.vue'
+import PeriodChoiceDialog from 'components/admin/PeriodChoiceDialog.vue'
 import { currentSeason } from 'src/utils/season'
 import type { MatchEvent, MatchEventType, MatchWinType, Wrestler } from 'src/types'
 
@@ -363,8 +365,41 @@ const endPeriodShort = computed(() => {
   return 'Next OT'
 })
 
+/**
+ * Periods 2 and 3 start from a choice, and the scorer is the only one who
+ * knows what it was. Asked here because a finished bout cannot be asked.
+ */
+const CHOICE_PERIODS = [2, 3]
+
+const choiceOpen = ref(false)
+const choiceFor = ref(2)
+
 function endPeriod() {
-  period.value += 1
+  const next = period.value + 1
+
+  if (CHOICE_PERIODS.includes(next)) {
+    choiceFor.value = next
+    choiceOpen.value = true
+    // The period advances when the question is answered or skipped, so the
+    // scoreboard cannot get ahead of the sheet.
+    return
+  }
+
+  period.value = next
+}
+
+function applyChoice(marks: MatchEvent[]) {
+  // Skipping leaves whatever was there. It means "do not record", not "erase".
+  if (marks.length) {
+    // Answering replaces. The period can be stepped back and ended again, and
+    // two sets of choice marks on one period would be nonsense on the sheet.
+    const cleared = events.value.filter(
+      (e) => !(e.period === choiceFor.value && isChoice(e.type)),
+    )
+    events.value = [...cleared, ...marks]
+  }
+
+  period.value = choiceFor.value
 }
 
 /** Undo only truncates the call log, so a mis-tapped period needs its own way back. */
@@ -721,6 +756,16 @@ useMeta({ title: 'Score a bout' })
         :their-name="opponentName || 'Opponent'"
         :our-band="ourBand ?? 'red'"
         @update:events="events = $event"
+      />
+
+      <PeriodChoiceDialog
+        v-model="choiceOpen"
+        :period="choiceFor"
+        :events="events"
+        :our-name="wrestlerName || 'Ours'"
+        :their-name="opponentName || 'Opponent'"
+        :our-band="ourBand ?? 'red'"
+        @done="applyChoice"
       />
     </section>
 
