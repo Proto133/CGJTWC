@@ -59,6 +59,20 @@ export function eventName(type: MatchEventType): string {
   return EVENT_NAMES[type] ?? type
 }
 
+/**
+ * Periods 1 to 3, then overtime continues the sequence.
+ *
+ * Abbreviated because these are column headings on a table that can run to
+ * seven columns on a phone. The full wording goes in the cell's title.
+ */
+export function periodLabel(period: number): string {
+  return period <= 3 ? `P${period}` : `OT${period - 3}`
+}
+
+export function periodName(period: number): string {
+  return period <= 3 ? `Period ${period}` : `Overtime ${period - 3}`
+}
+
 /** Short display labels, for bout lists where a line has to fit. */
 const WIN_TYPE_LABELS: Record<MatchWinType, string> = {
   decision: 'Decision',

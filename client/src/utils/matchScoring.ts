@@ -296,6 +296,67 @@ export function countsFromEvents(
   return counts
 }
 
+export interface PeriodColumn {
+  period: number
+  /** Calls shown in each wrestler's cell, in the order they happened. */
+  wrestler: MatchEvent[]
+  opponent: MatchEvent[]
+  wrestlerPoints: number
+  opponentPoints: number
+}
+
+/**
+ * The bout period by period, laid out as a scorebook would.
+ *
+ * A call that scores is listed under the wrestler who *received* the points,
+ * which for an infraction is not the wrestler it was called on. That is how a
+ * scoresheet is kept, and it is what makes each row add up to that wrestler's
+ * score — filing a stalling point under the offender would leave the row and
+ * the total disagreeing with no explanation on the page.
+ *
+ * Calls worth nothing — a stalling warning, a caution — go under the offender
+ * instead. They score for nobody, so they cannot unbalance a row, and who they
+ * were called on is the only useful thing about them.
+ *
+ * Always at least three periods, so a bout that ended in the first still reads
+ * as a scoresheet rather than a fragment.
+ */
+export function periodBreakdown(events: MatchEvent[]): PeriodColumn[] {
+  const highest = events.reduce((max, e) => Math.max(max, e.period), 3)
+
+  const columns: PeriodColumn[] = []
+  for (let period = 1; period <= highest; period += 1) {
+    columns.push({
+      period,
+      wrestler: [],
+      opponent: [],
+      wrestlerPoints: 0,
+      opponentPoints: 0,
+    })
+  }
+
+  for (const event of events) {
+    // Clamped rather than skipped. A call with a nonsense period is still a
+    // call, and dropping it here while it still counts towards the score would
+    // produce a table whose rows do not add up to their own totals.
+    const column = columns[Math.max(1, event.period) - 1]
+    if (!column) continue
+
+    const points = eventPoints(event.type)
+    const side = points > 0 ? creditedSide(event) : event.side
+
+    if (side === 'wrestler') {
+      column.wrestler.push(event)
+      column.wrestlerPoints += points
+    } else {
+      column.opponent.push(event)
+      column.opponentPoints += points
+    }
+  }
+
+  return columns
+}
+
 /**
  * The bout's counts, from whichever source exists.
  *

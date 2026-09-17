@@ -2,6 +2,8 @@
 import { computed, ref, watch } from 'vue'
 import { Dialog, date as qdate } from 'quasar'
 import { useMatchesStore } from 'stores/matches'
+import { useWrestlersStore } from 'stores/wrestlers'
+import MatchPeriodScore from 'components/admin/MatchPeriodScore.vue'
 import { emptyCounts, reconcile, scoreFromCounts, scoreFromEvents } from 'src/utils/matchScoring'
 import { WIN_TYPE_OPTIONS } from 'src/utils/matchLabels'
 import type { Match, MatchCounts, MatchResult, MatchWinType } from 'src/types'
@@ -27,8 +29,19 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'update:modelValue', open: boolean): void }>()
 
 const matchesStore = useMatchesStore()
+const wrestlersStore = useWrestlersStore()
 
 const liveScored = computed(() => Boolean(props.match?.events?.length))
+
+/**
+ * Falls back rather than showing an id. Every screen this dialog opens from has
+ * the roster loaded, but a wrestler deleted since the bout was recorded would
+ * otherwise put a document id in the scoresheet.
+ */
+const ourName = computed(() => {
+  const wrestler = props.match ? wrestlersStore.byId(props.match.wrestlerId) : null
+  return wrestler ? `${wrestler.firstName} ${wrestler.lastName}` : 'Our wrestler'
+})
 
 interface FormState {
   result: MatchResult
@@ -249,13 +262,24 @@ function confirmDelete() {
       <q-card-section>
         <div class="block-label">Scoring detail</div>
 
-        <!-- A live-scored bout shows its log rather than a form. The calls were
-             recorded as they were made; totals typed a week later are not an
-             improvement on that. -->
-        <div v-if="liveScored" class="detail-locked">
-          Scored live — {{ match.events?.length }} calls recorded, adding up to
-          {{ detailPoints }} points. The log is the record and is not editable here.
-        </div>
+        <!-- A live-scored bout shows its scoresheet rather than a form. The
+             calls were recorded as they were made, with the period they fell
+             in; totals typed a week later are not an improvement on that. -->
+        <template v-if="liveScored">
+          <MatchPeriodScore
+            :events="match.events ?? []"
+            :our-name="ourName"
+            :their-name="match.opponentName || 'Opponent'"
+            :result="match.result"
+            :win-type="match.winType"
+            :official-for="match.officialFor"
+            :official-against="match.officialAgainst"
+          />
+          <div class="detail-locked q-mt-md">
+            Scored live, so the calls above are the record and are not editable
+            here. The result and official score below still are.
+          </div>
+        </template>
 
         <template v-else>
           <p class="detail-help">
