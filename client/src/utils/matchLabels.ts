@@ -60,6 +60,33 @@ export function eventName(type: MatchEventType): string {
 }
 
 /**
+ * How an infraction reads on a scoresheet cell.
+ *
+ * Written out rather than abbreviated, because an infraction is the one call
+ * that does not sit with the wrestler who caused it. "S1" in a wrestler's cell
+ * invites the reading that they stalled; "Stall 1" reads as what it is — a
+ * point they were given because the other wrestler did.
+ *
+ * The number is the points it was worth, so a two-point stall is "Stall 2".
+ * Calls worth nothing carry no number.
+ */
+const CALL_WORDS: Partial<Record<MatchEventType, string>> = {
+  stallWarning: 'Stall',
+  stallPoint: 'Stall',
+  stallPoint2: 'Stall',
+  stallDq: 'Stall',
+  caution: 'Caution',
+  cautionPoint: 'Caution',
+  penalty1: 'Penalty',
+  penalty2: 'Penalty',
+}
+
+export function infractionMark(type: MatchEventType, points: number): string {
+  const word = CALL_WORDS[type] ?? eventLabel(type)
+  return points > 0 ? `${word} ${points}` : word
+}
+
+/**
  * Periods 1 to 3, then overtime continues the sequence.
  *
  * Abbreviated because these are column headings on a table that can run to

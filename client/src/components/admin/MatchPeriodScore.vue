@@ -1,7 +1,19 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { eventPoints, periodBreakdown, scoreFromEvents } from 'src/utils/matchScoring'
-import { eventLabel, eventName, periodLabel, periodName, winTypeLabel } from 'src/utils/matchLabels'
+import {
+  eventPoints,
+  isInfraction,
+  periodBreakdown,
+  scoreFromEvents,
+} from 'src/utils/matchScoring'
+import {
+  eventLabel,
+  eventName,
+  infractionMark,
+  periodLabel,
+  periodName,
+  winTypeLabel,
+} from 'src/utils/matchLabels'
 import type { MatchEvent, MatchResult, MatchWinType } from 'src/types'
 
 /**
@@ -24,6 +36,20 @@ const props = defineProps<{
 
 const columns = computed(() => periodBreakdown(props.events))
 const derived = computed(() => scoreFromEvents(props.events))
+
+/**
+ * A move is its shorthand; an infraction is written out.
+ *
+ * The shorthand works for a move because it sits with the wrestler who made
+ * it. An infraction sits with the wrestler who gained by it, so it has to say
+ * so rather than leaving "S1" to be misread as them having stalled.
+ */
+function markLabel(event: MatchEvent): string {
+  const points = eventPoints(event.type)
+  return isInfraction(event.type)
+    ? infractionMark(event.type, points)
+    : eventLabel(event.type)
+}
 
 function cellTitle(event: MatchEvent): string {
   return `${eventName(event.type)}, ${periodName(event.period)}`
@@ -80,7 +106,7 @@ const officialDiffers = computed(() => {
                 class="call"
                 :class="{ 'call--free': !scores(event) }"
                 :title="cellTitle(event)"
-              >{{ eventLabel(event.type) }}</span>
+              >{{ markLabel(event) }}</span>
               <span v-if="column.wrestler.length === 0" class="call__none">—</span>
             </td>
             <td class="sheet__total">{{ derived.for }}</td>
@@ -94,7 +120,7 @@ const officialDiffers = computed(() => {
                 class="call"
                 :class="{ 'call--free': !scores(event) }"
                 :title="cellTitle(event)"
-              >{{ eventLabel(event.type) }}</span>
+              >{{ markLabel(event) }}</span>
               <span v-if="column.opponent.length === 0" class="call__none">—</span>
             </td>
             <td class="sheet__total">{{ derived.against }}</td>
@@ -109,9 +135,10 @@ const officialDiffers = computed(() => {
          Penalty points sit with the wrestler who gained them, which is not the
          one the call was made against. -->
     <p class="sheet__key">
-      Penalty and stalling points are shown under the wrestler who received
-      them. Outlined calls — warnings and cautions — are shown under the
-      wrestler they were called on and score nothing.
+      “Stall 1” and the like are points <em>gained</em> because the other
+      wrestler was penalised, which is why they sit on this line. Outlined marks
+      are calls that scored nothing, shown against the wrestler they were called
+      on.
     </p>
 
     <p v-if="officialDiffers" class="sheet__warn">
