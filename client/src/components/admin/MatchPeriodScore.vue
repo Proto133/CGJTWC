@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { eventPoints, periodBreakdown, scoreFromEvents } from 'src/utils/matchScoring'
+import { periodBreakdown, scoreFromEvents } from 'src/utils/matchScoring'
+import type { ScoreMark } from 'src/utils/matchScoring'
 import {
+  awardMark,
   eventLabel,
   eventName,
   periodLabel,
@@ -31,8 +33,16 @@ const props = defineProps<{
 const columns = computed(() => periodBreakdown(props.events))
 const derived = computed(() => scoreFromEvents(props.events))
 
-function cellTitle(event: MatchEvent): string {
-  return `${eventName(event.type)}, ${periodName(event.period)}`
+/** The call as made, or the point it handed over. */
+function markLabel(mark: ScoreMark): string {
+  return mark.kind === 'award' ? awardMark(mark.type) : eventLabel(mark.type)
+}
+
+function markTitle(mark: ScoreMark): string {
+  const name = eventName(mark.type)
+  if (mark.kind === 'award') return `${name} \u2014 ${mark.points} to this wrestler`
+  if (mark.kind === 'call') return `${name} \u2014 called on this wrestler`
+  return name
 }
 
 /**
@@ -45,21 +55,26 @@ function cellTitle(event: MatchEvent): string {
  */
 const key = computed(() => {
   const seen = new Set<string>()
-  const entries: { mark: string; name: string }[] = []
+  const entries: { id: string; mark: string; name: string; scores: boolean }[] = []
 
-  for (const event of props.events) {
-    if (seen.has(event.type)) continue
-    seen.add(event.type)
-    entries.push({ mark: eventLabel(event.type), name: eventName(event.type).toLowerCase() })
+  for (const column of columns.value) {
+    for (const mark of [...column.wrestler, ...column.opponent]) {
+      const id = `${mark.kind}:${mark.type}`
+      if (seen.has(id)) continue
+      seen.add(id)
+      entries.push({
+        id,
+        mark: markLabel(mark),
+        name: mark.kind === 'call' && mark.points === 0 && seen.has(`award:${mark.type}`)
+          ? `${eventName(mark.type).toLowerCase()}, the call`
+          : eventName(mark.type).toLowerCase(),
+        scores: mark.points > 0,
+      })
+    }
   }
 
   return entries
 })
-
-/** Warnings and cautions score nothing, and are drawn so they do not look like they do. */
-function scores(event: MatchEvent): boolean {
-  return eventPoints(event.type) > 0
-}
 
 const winner = computed(() => (props.result === 'win' ? props.ourName : props.theirName))
 
@@ -102,12 +117,12 @@ const officialDiffers = computed(() => {
             <th scope="row" class="sheet__who">{{ ourName }}</th>
             <td v-for="column in columns" :key="column.period">
               <span
-                v-for="(event, i) in column.wrestler"
+                v-for="(mark, i) in column.wrestler"
                 :key="i"
                 class="call"
-                :class="{ 'call--free': !scores(event) }"
-                :title="cellTitle(event)"
-              >{{ eventLabel(event.type) }}</span>
+                :class="{ 'call--free': mark.points === 0 }"
+                :title="markTitle(mark)"
+              >{{ markLabel(mark) }}</span>
               <span v-if="column.wrestler.length === 0" class="call__none">—</span>
             </td>
             <td class="sheet__total">{{ derived.for }}</td>
@@ -116,12 +131,12 @@ const officialDiffers = computed(() => {
             <th scope="row" class="sheet__who">{{ theirName }}</th>
             <td v-for="column in columns" :key="column.period">
               <span
-                v-for="(event, i) in column.opponent"
+                v-for="(mark, i) in column.opponent"
                 :key="i"
                 class="call"
-                :class="{ 'call--free': !scores(event) }"
-                :title="cellTitle(event)"
-              >{{ eventLabel(event.type) }}</span>
+                :class="{ 'call--free': mark.points === 0 }"
+                :title="markTitle(mark)"
+              >{{ markLabel(mark) }}</span>
               <span v-if="column.opponent.length === 0" class="call__none">—</span>
             </td>
             <td class="sheet__total">{{ derived.against }}</td>
@@ -133,16 +148,18 @@ const officialDiffers = computed(() => {
     <div class="sheet__result">{{ resultLine }}</div>
 
     <ul v-if="key.length" class="sheet__key">
-      <li v-for="entry in key" :key="entry.mark">
-        <span class="call call--key">{{ entry.mark }}</span>{{ entry.name }}
+      <li v-for="entry in key" :key="entry.id">
+        <span
+          class="call call--key"
+          :class="{ 'call--free': !entry.scores }"
+        >{{ entry.mark }}</span>{{ entry.name }}
       </li>
     </ul>
 
-    <!-- The one thing the standard marks do not make obvious on their own. -->
+    <!-- The thing the marks cannot say on their own. -->
     <p class="sheet__note">
-      A penalty mark sits on the line of the wrestler who <em>gained</em> the
-      point, not the one it was called against. Outlined marks scored nothing
-      and sit with the wrestler they were called on.
+      An infraction appears twice: outlined against the wrestler it was called
+      on, and filled on the other wrestler's line for the point it gave them.
     </p>
 
     <p v-if="officialDiffers" class="sheet__warn">

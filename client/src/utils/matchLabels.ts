@@ -30,20 +30,43 @@ const EVENT_LABELS: Record<MatchEventType, string> = {
   nearFall2: 'N2',
   nearFall3: 'N3',
   nearFall4: 'N4',
-  penalty1: 'P1',
-  penalty2: 'P2',
+  /** The call, not its value. The points it gave away are marked separately. */
+  penalty1: 'P',
+  penalty2: 'P',
   /** Lowercase w, as printed: a warning rather than a point. */
   stallWarning: 'Sw',
-  stallPoint: 'S1',
-  stallPoint2: 'S2',
+  stallPoint: 'S',
+  stallPoint2: 'S',
   stallDq: 'DQ',
   caution: 'C',
-  /** The point earned after a second caution, exactly as the legend has it. */
-  cautionPoint: 'C1',
+  cautionPoint: 'C',
   chooseUp: '\u25B2',
   chooseDown: '\u25BC',
   chooseNeutral: '=',
   defer: 'D',
+}
+
+/**
+ * The mark for the POINTS an infraction handed over, as opposed to the call.
+ *
+ * An infraction goes on the sheet twice: the call against the wrestler it was
+ * made on, and the point on the line of the wrestler who gained it. The legend
+ * spells this out for cautions — "C" the caution, "C1" the point earned after
+ * the second one — and the same shape applies to stalling and penalties.
+ *
+ * Only infractions worth something appear here. A warning gives nothing away,
+ * so there is nothing to mark on the other line.
+ */
+const AWARD_MARKS: Partial<Record<MatchEventType, string>> = {
+  stallPoint: 'S1',
+  stallPoint2: 'S2',
+  cautionPoint: 'C1',
+  penalty1: 'P1',
+  penalty2: 'P2',
+}
+
+export function awardMark(type: MatchEventType): string {
+  return AWARD_MARKS[type] ?? eventLabel(type)
 }
 
 /** Full names, for the box score, where being unambiguous matters more. */

@@ -382,27 +382,45 @@ export function countsFromEvents(
   return counts
 }
 
+export type MarkKind =
+  /** A scoring move: the call and the points are the same thing. */
+  | 'move'
+  /** An infraction, against the wrestler it was called on. Scores nothing here. */
+  | 'call'
+  /** The points that infraction handed to the other wrestler. */
+  | 'award'
+
+export interface ScoreMark {
+  kind: MarkKind
+  type: MatchEventType
+  /** Points this mark is worth to the wrestler whose cell it sits in. */
+  points: number
+}
+
 export interface PeriodColumn {
   period: number
-  /** Calls shown in each wrestler's cell, in the order they happened. */
-  wrestler: MatchEvent[]
-  opponent: MatchEvent[]
+  /** Marks in each wrestler's cell, in the order they happened. */
+  wrestler: ScoreMark[]
+  opponent: ScoreMark[]
   wrestlerPoints: number
   opponentPoints: number
 }
 
 /**
- * The bout period by period, laid out as a scorebook would.
+ * The bout period by period, laid out as a scoresheet.
  *
- * A call that scores is listed under the wrestler who *received* the points,
- * which for an infraction is not the wrestler it was called on. That is how a
- * scoresheet is kept, and it is what makes each row add up to that wrestler's
- * score — filing a stalling point under the offender would leave the row and
- * the total disagreeing with no explanation on the page.
+ * An infraction lands on the sheet twice, because a sheet records two separate
+ * things about it. The call goes against the wrestler it was made on — five
+ * stalling calls on one wrestler is Sw S S S DQ down their line, which is what
+ * shows at a glance how close they were to being disqualified. The points it
+ * handed over go on the other wrestler's line, marked S1, S2, C1, P1.
  *
- * Calls worth nothing — a stalling warning, a caution — go under the offender
- * instead. They score for nobody, so they cannot unbalance a row, and who they
- * were called on is the only useful thing about them.
+ * A scoring move is the simple case: the call and the points are the same
+ * thing, and both belong to whoever made it.
+ *
+ * The rows still add up, because only one of the two marks carries the points.
+ * The call is worth nothing on the offender's line, and the award is worth the
+ * full value on the other.
  *
  * Always at least three periods, so a bout that ended in the first still reads
  * as a scoresheet rather than a fragment.
@@ -421,6 +439,16 @@ export function periodBreakdown(events: MatchEvent[]): PeriodColumn[] {
     })
   }
 
+  function add(column: PeriodColumn, side: 'wrestler' | 'opponent', mark: ScoreMark) {
+    if (side === 'wrestler') {
+      column.wrestler.push(mark)
+      column.wrestlerPoints += mark.points
+    } else {
+      column.opponent.push(mark)
+      column.opponentPoints += mark.points
+    }
+  }
+
   for (const event of events) {
     // Clamped rather than skipped. A call with a nonsense period is still a
     // call, and dropping it here while it still counts towards the score would
@@ -429,14 +457,16 @@ export function periodBreakdown(events: MatchEvent[]): PeriodColumn[] {
     if (!column) continue
 
     const points = eventPoints(event.type)
-    const side = points > 0 ? creditedSide(event) : event.side
 
-    if (side === 'wrestler') {
-      column.wrestler.push(event)
-      column.wrestlerPoints += points
-    } else {
-      column.opponent.push(event)
-      column.opponentPoints += points
+    if (!INFRACTIONS.has(event.type)) {
+      add(column, event.side, { kind: 'move', type: event.type, points })
+      continue
+    }
+
+    add(column, event.side, { kind: 'call', type: event.type, points: 0 })
+
+    if (points > 0) {
+      add(column, creditedSide(event), { kind: 'award', type: event.type, points })
     }
   }
 
