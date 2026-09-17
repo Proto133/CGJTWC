@@ -816,6 +816,17 @@ export interface Match {
   officialFor?: number
   officialAgainst?: number
 
+  /**
+   * When a fall happened: the period, and the time left on the clock in it.
+   *
+   * A scoresheet records this, and it is not decoration — "pinned with 0:12
+   * left in the third" and "pinned with 1:40 left in the first" read as very
+   * different results a season later.
+   */
+  fallPeriod?: number
+  /** 'M:SS' remaining in that period. */
+  fallTime?: string
+
   /** Present when scored live. Takes precedence over `counts`. */
   events?: MatchEvent[]
   /** Present when entered by hand from a bracket. */

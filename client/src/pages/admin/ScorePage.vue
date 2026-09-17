@@ -6,6 +6,7 @@ import { useMatchesStore } from 'stores/matches'
 import { useEventsStore } from 'stores/events'
 import {
   STALL_DQ_AT,
+  TECH_FALL_MARGIN,
   cautionConsequence,
   cautionConsequenceShort,
   cautionCount,
@@ -23,6 +24,7 @@ import {
 import { WIN_TYPE_OPTIONS, eventLabel, eventName } from 'src/utils/matchLabels'
 import BoxScoreDialog from 'components/admin/BoxScoreDialog.vue'
 import PeriodChoiceDialog from 'components/admin/PeriodChoiceDialog.vue'
+import FallDialog from 'components/admin/FallDialog.vue'
 import { currentSeason } from 'src/utils/season'
 import type { MatchEvent, MatchEventType, MatchWinType, Wrestler } from 'src/types'
 
@@ -77,6 +79,9 @@ const officialFor = ref<number | null>(null)
 const officialAgainst = ref<number | null>(null)
 /** Why the bout ended, when it ended itself rather than being ended by hand. */
 const finishNote = ref('')
+/** Only meaningful for a fall. 'M:SS' left on the clock, and which period. */
+const fallPeriod = ref<number | null>(null)
+const fallTime = ref('')
 
 onMounted(() => {
   wrestlersStore.subscribe()
@@ -190,6 +195,28 @@ const CALLS: MatchEventType[] = [
 
 function record(type: MatchEventType, side: 'wrestler' | 'opponent') {
   events.value = [...events.value, { type, side, period: period.value }]
+  checkTechFall()
+}
+
+/**
+ * A fifteen-point lead ends the bout there and then.
+ *
+ * Checked on the way in rather than by watching the score, so undoing back
+ * below the margin and stepping forward again behaves sensibly instead of
+ * re-firing. The referee stops the match the moment the margin is reached, so
+ * the app should not sit waiting to be told.
+ */
+function checkTechFall() {
+  const { for: ours, against: theirs } = scoreFromEvents(events.value)
+  const margin = Math.abs(ours - theirs)
+  if (margin < TECH_FALL_MARGIN) return
+
+  officialFor.value = ours
+  officialAgainst.value = theirs
+  result.value = ours > theirs ? 'win' : 'loss'
+  winType.value = 'techFall'
+  finishNote.value = `${margin}-point lead \u2014 technical fall.`
+  stage.value = 'finish'
 }
 
 // ---------------------------------------------------------------------------
@@ -407,6 +434,25 @@ function backPeriod() {
   if (period.value > 1) period.value -= 1
 }
 
+const fallOpen = ref(false)
+
+/**
+ * A fall is the one ending that cannot be inferred from the score, so it gets
+ * its own button — and its own confirmation, since a stray tap on it would end
+ * a bout that is still being wrestled.
+ */
+function recordFall(side: 'wrestler' | 'opponent', clock: string) {
+  const derived = score.value
+  officialFor.value = derived.for
+  officialAgainst.value = derived.against
+  result.value = side === 'wrestler' ? 'win' : 'loss'
+  winType.value = 'fall'
+  fallPeriod.value = period.value
+  fallTime.value = clock
+  finishNote.value = `Fall with ${clock} left in ${periodShort.value}.`
+  stage.value = 'finish'
+}
+
 function endMatch() {
   const derived = score.value
   finishNote.value = ''
@@ -421,6 +467,8 @@ function endMatch() {
 
 const tallyDisagrees = computed(() =>
   officialFor.value !== score.value.for || officialAgainst.value !== score.value.against)
+
+const fallTimeValid = computed(() => /^[0-9]:[0-5][0-9]$/.test(fallTime.value))
 
 async function save() {
   if (!wrestlerId.value) return
@@ -446,6 +494,12 @@ async function save() {
     ...(round.value ? { round: round.value.trim() } : {}),
     ...(officialFor.value !== null ? { officialFor: officialFor.value } : {}),
     ...(officialAgainst.value !== null ? { officialAgainst: officialAgainst.value } : {}),
+    // Only carried on a fall. Left on any other ending they would be a time
+    // that refers to nothing.
+    ...(winType.value === 'fall' && fallPeriod.value !== null
+      ? { fallPeriod: fallPeriod.value } : {}),
+    ...(winType.value === 'fall' && /^[0-9]:[0-5][0-9]$/.test(fallTime.value)
+      ? { fallTime: fallTime.value } : {}),
   })
 
   if (id) reset()
@@ -465,6 +519,8 @@ function reset() {
   officialFor.value = null
   officialAgainst.value = null
   finishNote.value = ''
+  fallPeriod.value = null
+  fallTime.value = ''
 }
 
 function discard() {
@@ -616,6 +672,14 @@ useMeta({ title: 'Score a bout' })
             class="centre__btn centre__btn--end"
             @click="endMatch"
           >End match</button>
+          <!-- Set apart from the two buttons above it, and away from the
+               scoring grid a thumb rests on, because it ends the bout in one
+               step and cannot be inferred from the score. -->
+          <button
+            type="button"
+            class="centre__btn centre__btn--fall"
+            @click="fallOpen = true"
+          >Fall</button>
         </div>
 
         <div class="score-side" :class="`score-side--${theirBand}`">
@@ -767,6 +831,15 @@ useMeta({ title: 'Score a bout' })
         :our-band="ourBand ?? 'red'"
         @done="applyChoice"
       />
+
+      <FallDialog
+        v-model="fallOpen"
+        :period="period"
+        :our-name="wrestlerName || 'Ours'"
+        :their-name="opponentName || 'Opponent'"
+        :our-band="ourBand ?? 'red'"
+        @record="recordFall"
+      />
     </section>
 
     <!-- FINISH -->
@@ -831,6 +904,33 @@ useMeta({ title: 'Score a bout' })
         dark
         class="q-mt-md"
       />
+
+      <!-- Asked however the fall got here: the button fills these in, picking
+           'Fall' by hand does not, and either way the sheet wants them. -->
+      <div v-if="winType === 'fall'" class="row q-col-gutter-sm q-mt-sm">
+        <div class="col-6">
+          <q-input
+            v-model.number="fallPeriod"
+            type="number"
+            min="1"
+            label="Period of the fall"
+            outlined
+            dark
+          />
+        </div>
+        <div class="col-6">
+          <q-input
+            v-model="fallTime"
+            label="Time left"
+            mask="#:##"
+            placeholder="1:38"
+            outlined
+            dark
+            :error="fallTime.length > 0 && !fallTimeValid"
+            error-message="Enter it as M:SS"
+          />
+        </div>
+      </div>
 
       <div class="row q-gutter-sm q-mt-lg">
         <q-btn flat no-caps color="white" label="Back" @click="stage = 'scoring'" />
@@ -1106,6 +1206,19 @@ useMeta({ title: 'Score a bout' })
 .centre__btn--end {
   border-color: var(--gold-500, #d4a017);
   color: var(--gold-500, #d4a017);
+}
+
+/* Gapped away from the others and in the mat's own red: this one ends the
+   bout outright, and it sits in the middle column precisely because that is
+   the part of the screen nothing else is being tapped on. */
+.centre__btn--fall {
+  margin-top: 6px;
+  border-color: var(--band-red-ink);
+  color: var(--band-red-ink);
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 /* Calls ----------------------------------------------------------------- */
