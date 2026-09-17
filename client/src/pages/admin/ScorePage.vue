@@ -6,7 +6,9 @@ import { useMatchesStore } from 'stores/matches'
 import { useEventsStore } from 'stores/events'
 import {
   STALL_DQ_AT,
+  SUDDEN_VICTORY_PERIOD,
   TECH_FALL_MARGIN,
+  TIEBREAKER_PERIOD,
   cautionConsequence,
   cautionConsequenceShort,
   cautionCount,
@@ -21,7 +23,13 @@ import {
   suggestWinType,
   undoLast,
 } from 'src/utils/matchScoring'
-import { WIN_TYPE_OPTIONS, eventLabel, eventName } from 'src/utils/matchLabels'
+import {
+  WIN_TYPE_OPTIONS,
+  eventLabel,
+  eventName,
+  periodLabel,
+  periodName,
+} from 'src/utils/matchLabels'
 import BoxScoreDialog from 'components/admin/BoxScoreDialog.vue'
 import PeriodChoiceDialog from 'components/admin/PeriodChoiceDialog.vue'
 import FallDialog from 'components/admin/FallDialog.vue'
@@ -372,31 +380,37 @@ function startBout() {
   stage.value = 'scoring'
 }
 
-/** Periods 1–3, then overtime continues the sequence. */
-const periodLabel = computed(() =>
-  period.value <= 3 ? `Period ${period.value}` : `Overtime ${period.value - 3}`)
+const periodTitle = computed(() => periodName(period.value))
 
-/** Abbreviated, because it now lives in a narrow column between the scores. */
-const periodShort = computed(() =>
-  period.value <= 3 ? `P${period.value}` : `OT${period.value - 3}`)
+/** Abbreviated, because it lives in a narrow column between the scores. */
+const periodShort = computed(() => periodLabel(period.value))
 
+/**
+ * Named for what comes next rather than what is ending, because in overtime
+ * the next thing has a name worth saying: sudden victory, then the tiebreaker.
+ */
 const endPeriodLabel = computed(() => {
   if (period.value < 3) return `End period ${period.value}`
-  if (period.value === 3) return 'Go to overtime'
-  return 'Next overtime'
+  if (period.value === 3) return 'Go to sudden victory'
+  if (period.value === SUDDEN_VICTORY_PERIOD) return 'Go to the tiebreaker'
+  return 'Next period'
 })
 
 const endPeriodShort = computed(() => {
   if (period.value < 3) return 'End period'
-  if (period.value === 3) return 'Overtime'
-  return 'Next OT'
+  if (period.value === 3) return 'Sudden victory'
+  if (period.value === SUDDEN_VICTORY_PERIOD) return 'Tiebreaker'
+  return 'Next'
 })
 
 /**
- * Periods 2 and 3 start from a choice, and the scorer is the only one who
- * knows what it was. Asked here because a finished bout cannot be asked.
+ * The periods that start from a choice.
+ *
+ * Sudden victory is missing on purpose: it always starts neutral, so there is
+ * nothing to ask. The tiebreaker after it does have one, and it goes to
+ * whoever scored first in regulation.
  */
-const CHOICE_PERIODS = [2, 3]
+const CHOICE_PERIODS = [2, 3, TIEBREAKER_PERIOD]
 
 const choiceOpen = ref(false)
 const choiceFor = ref(2)
@@ -645,7 +659,7 @@ useMeta({ title: 'Score a bout' })
              board that is neither wrestler's, and it keeps them off the edges
              where a thumb rests while scoring. -->
         <div class="centre">
-          <div class="centre__period" :aria-label="periodLabel">
+          <div class="centre__period" :aria-label="periodTitle">
             <q-btn
               v-if="period > 1"
               dense

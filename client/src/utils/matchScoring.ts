@@ -124,6 +124,11 @@ export function chooserFor(
   events: MatchEvent[],
   period: number,
 ): 'wrestler' | 'opponent' | null {
+  // The tiebreaker goes to whoever scored first in regulation. This is why a
+  // paper scoresheet has the scorer circle that point: it is the only thing
+  // the choice depends on, and by then it is three periods back.
+  if (period === TIEBREAKER_PERIOD) return firstRegulationScorer(events)
+
   if (period !== 3) return null
 
   const second = events.filter((e) => e.period === 2 && CHOICES.has(e.type))
@@ -134,6 +139,40 @@ export function chooserFor(
   const took = second.find((e) => e.type !== 'defer')
   if (!took) return null
   return took.side === 'wrestler' ? 'opponent' : 'wrestler'
+}
+
+/**
+ * IKWF overtime, counted as periods so the rest of the app needs no new idea
+ * of what a period is.
+ *
+ * Four is a minute of sudden victory, started neutral and won by the first
+ * point, so nobody chooses and nothing is asked. Five is the thirty-second
+ * tiebreaker, which does have a choice.
+ */
+export const SUDDEN_VICTORY_PERIOD = 4
+export const TIEBREAKER_PERIOD = 5
+
+/**
+ * Who put the first point on the board in regulation.
+ *
+ * Credited side, not the side the call was made on: a bout whose first point
+ * came from the opponent's stalling was still scored by the wrestler who
+ * received it, and that is who the choice belongs to.
+ *
+ * Note this does not handle the double-stalling and simultaneous-penalty case,
+ * where the rules say neither wrestler counts as having scored first. Nothing
+ * here records that two calls were simultaneous, so it cannot be told apart
+ * from two calls in a row — the prompt shows who it worked out and can be
+ * overridden.
+ */
+export function firstRegulationScorer(
+  events: MatchEvent[],
+): 'wrestler' | 'opponent' | null {
+  for (const event of events) {
+    if (event.period > 3) break
+    if (eventPoints(event.type) > 0) return creditedSide(event)
+  }
+  return null
 }
 
 /** Folkstyle technical superiority. A rules value, not a constant. */

@@ -77,17 +77,24 @@ export function eventName(type: MatchEventType): string {
 }
 
 /**
- * Periods 1 to 3, then overtime continues the sequence.
+ * Three periods, then IKWF overtime: a minute of sudden victory, then a
+ * thirty-second tiebreaker.
  *
- * Abbreviated because these are column headings on a table that can run to
- * seven columns on a phone. The full wording goes in the cell's title.
+ * SV and TB are the legend's own abbreviations. Abbreviated at all because
+ * these are column headings on a table that can run to six columns on a
+ * phone; the full wording goes in the cell's title.
  */
+const PERIOD_MARKS: Record<number, string> = { 4: 'SV', 5: 'TB' }
+const PERIOD_NAMES: Record<number, string> = { 4: 'Sudden victory', 5: 'Tiebreaker' }
+
 export function periodLabel(period: number): string {
-  return period <= 3 ? `P${period}` : `OT${period - 3}`
+  if (period <= 3) return `P${period}`
+  return PERIOD_MARKS[period] ?? `TB${period - 4}`
 }
 
 export function periodName(period: number): string {
-  return period <= 3 ? `Period ${period}` : `Overtime ${period - 3}`
+  if (period <= 3) return `Period ${period}`
+  return PERIOD_NAMES[period] ?? `Tiebreaker ${period - 4}`
 }
 
 /** Short display labels, for bout lists where a line has to fit. */
