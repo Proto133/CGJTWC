@@ -172,16 +172,18 @@ watch([events, period, stage, ourBand], saveDraft, { deep: true })
 /**
  * The buttons, in the order a scorer reaches for them.
  *
- * Labels are the shorthand called on the mat rather than prose: there is no
- * time to read "near fall, three points" between scrambles.
+ * Labelled with the standard scoresheet marks rather than prose, and drawn
+ * from the same table the results screens use: there is no time to read "near
+ * fall, three points" between scrambles, and a scorer who learns T3 here
+ * should see T3 everywhere afterwards.
  */
-const CALLS: { type: MatchEventType; label: string; hint: string }[] = [
-  { type: 'takedown', label: 'T', hint: 'Takedown' },
-  { type: 'escape', label: 'E', hint: 'Escape' },
-  { type: 'reversal', label: 'R', hint: 'Reversal' },
-  { type: 'nearFall2', label: 'N2', hint: 'Near fall 2' },
-  { type: 'nearFall3', label: 'N3', hint: 'Near fall 3' },
-  { type: 'nearFall4', label: 'N4', hint: 'Near fall 4' },
+const CALLS: MatchEventType[] = [
+  'takedown',
+  'escape',
+  'reversal',
+  'nearFall2',
+  'nearFall3',
+  'nearFall4',
 ]
 
 function record(type: MatchEventType, side: 'wrestler' | 'opponent') {
@@ -689,26 +691,26 @@ useMeta({ title: 'Score a bout' })
         <div class="call-col">
           <button
             v-for="call in CALLS"
-            :key="`us-${call.type}`"
+            :key="`us-${call}`"
             type="button"
             class="call-btn"
             :class="`call-btn--${ourBand}`"
-            :title="call.hint"
-            :aria-label="`${call.hint}, ${ourBand}`"
-            @click="record(call.type, 'wrestler')"
-          >{{ call.label }}</button>
+            :title="eventName(call)"
+            :aria-label="`${eventName(call)}, ${ourBand}`"
+            @click="record(call, 'wrestler')"
+          >{{ eventLabel(call) }}</button>
         </div>
         <div class="call-col">
           <button
             v-for="call in CALLS"
-            :key="`them-${call.type}`"
+            :key="`them-${call}`"
             type="button"
             class="call-btn"
             :class="`call-btn--${theirBand}`"
-            :title="call.hint"
-            :aria-label="`${call.hint}, ${theirBand}`"
-            @click="record(call.type, 'opponent')"
-          >{{ call.label }}</button>
+            :title="eventName(call)"
+            :aria-label="`${eventName(call)}, ${theirBand}`"
+            @click="record(call, 'opponent')"
+          >{{ eventLabel(call) }}</button>
         </div>
       </div>
 

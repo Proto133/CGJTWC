@@ -1,15 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import {
-  eventPoints,
-  isInfraction,
-  periodBreakdown,
-  scoreFromEvents,
-} from 'src/utils/matchScoring'
+import { eventPoints, periodBreakdown, scoreFromEvents } from 'src/utils/matchScoring'
 import {
   eventLabel,
   eventName,
-  infractionMark,
   periodLabel,
   periodName,
   winTypeLabel,
@@ -37,23 +31,30 @@ const props = defineProps<{
 const columns = computed(() => periodBreakdown(props.events))
 const derived = computed(() => scoreFromEvents(props.events))
 
-/**
- * A move is its shorthand; an infraction is written out.
- *
- * The shorthand works for a move because it sits with the wrestler who made
- * it. An infraction sits with the wrestler who gained by it, so it has to say
- * so rather than leaving "S1" to be misread as them having stalled.
- */
-function markLabel(event: MatchEvent): string {
-  const points = eventPoints(event.type)
-  return isInfraction(event.type)
-    ? infractionMark(event.type, points)
-    : eventLabel(event.type)
-}
-
 function cellTitle(event: MatchEvent): string {
   return `${eventName(event.type)}, ${periodName(event.period)}`
 }
+
+/**
+ * A key for this bout only, in the order the calls first appeared.
+ *
+ * The marks are the standard ones, so anyone who keeps score can read them
+ * unaided — but plenty of people looking at a child's results cannot, and a
+ * full printed legend would be mostly rows that never occurred. Listing only
+ * what is on this sheet keeps it to a line or two.
+ */
+const key = computed(() => {
+  const seen = new Set<string>()
+  const entries: { mark: string; name: string }[] = []
+
+  for (const event of props.events) {
+    if (seen.has(event.type)) continue
+    seen.add(event.type)
+    entries.push({ mark: eventLabel(event.type), name: eventName(event.type).toLowerCase() })
+  }
+
+  return entries
+})
 
 /** Warnings and cautions score nothing, and are drawn so they do not look like they do. */
 function scores(event: MatchEvent): boolean {
@@ -106,7 +107,7 @@ const officialDiffers = computed(() => {
                 class="call"
                 :class="{ 'call--free': !scores(event) }"
                 :title="cellTitle(event)"
-              >{{ markLabel(event) }}</span>
+              >{{ eventLabel(event.type) }}</span>
               <span v-if="column.wrestler.length === 0" class="call__none">—</span>
             </td>
             <td class="sheet__total">{{ derived.for }}</td>
@@ -120,7 +121,7 @@ const officialDiffers = computed(() => {
                 class="call"
                 :class="{ 'call--free': !scores(event) }"
                 :title="cellTitle(event)"
-              >{{ markLabel(event) }}</span>
+              >{{ eventLabel(event.type) }}</span>
               <span v-if="column.opponent.length === 0" class="call__none">—</span>
             </td>
             <td class="sheet__total">{{ derived.against }}</td>
@@ -131,14 +132,17 @@ const officialDiffers = computed(() => {
 
     <div class="sheet__result">{{ resultLine }}</div>
 
-    <!-- Worth saying rather than leaving someone to add the rows up and wonder.
-         Penalty points sit with the wrestler who gained them, which is not the
-         one the call was made against. -->
-    <p class="sheet__key">
-      “Stall 1” and the like are points <em>gained</em> because the other
-      wrestler was penalised, which is why they sit on this line. Outlined marks
-      are calls that scored nothing, shown against the wrestler they were called
-      on.
+    <ul v-if="key.length" class="sheet__key">
+      <li v-for="entry in key" :key="entry.mark">
+        <span class="call call--key">{{ entry.mark }}</span>{{ entry.name }}
+      </li>
+    </ul>
+
+    <!-- The one thing the standard marks do not make obvious on their own. -->
+    <p class="sheet__note">
+      A penalty mark sits on the line of the wrestler who <em>gained</em> the
+      point, not the one it was called against. Outlined marks scored nothing
+      and sit with the wrestler they were called on.
     </p>
 
     <p v-if="officialDiffers" class="sheet__warn">
@@ -235,6 +239,28 @@ const officialDiffers = computed(() => {
 }
 
 .sheet__key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  font-size: 0.74rem;
+  color: var(--grey-500);
+}
+
+.sheet__key li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Same chip as the table, so the key is read by matching shapes. */
+.call--key {
+  margin: 0;
+}
+
+.sheet__note {
   margin: 8px 0 0;
   font-size: 0.74rem;
   line-height: 1.5;

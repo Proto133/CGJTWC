@@ -11,25 +11,34 @@ import type { Match, MatchEventType, MatchWinType } from 'src/types'
  */
 
 /**
- * Mat shorthand, for buttons and the tape where there is no room for words.
+ * The standard scoresheet abbreviations, used everywhere a call is shown.
  *
- * These are what a scorer says out loud, not descriptions: there is no time to
- * read "near fall, three points" between scrambles.
+ * These are not ours to invent. A letter for the call and a digit for what it
+ * was worth is what is printed on a scoresheet and what anyone who keeps score
+ * already reads, so a coach can look at this app's sheet and a paper one
+ * without translating between them.
+ *
+ * The takedown is T3 rather than the T2 on older printed legends because NFHS
+ * moved it to three points — which is also why the value lives in the POINTS
+ * table and only the name is written here. A sheet from an earlier season
+ * would say T2 and mean it.
  */
 const EVENT_LABELS: Record<MatchEventType, string> = {
-  takedown: 'T',
-  escape: 'E',
-  reversal: 'R',
+  takedown: 'T3',
+  escape: 'E1',
+  reversal: 'R2',
   nearFall2: 'N2',
   nearFall3: 'N3',
   nearFall4: 'N4',
   penalty1: 'P1',
   penalty2: 'P2',
-  stallWarning: 'SW',
+  /** Lowercase w, as printed: a warning rather than a point. */
+  stallWarning: 'Sw',
   stallPoint: 'S1',
   stallPoint2: 'S2',
   stallDq: 'DQ',
   caution: 'C',
+  /** The point earned after a second caution, exactly as the legend has it. */
   cautionPoint: 'C1',
 }
 
@@ -57,33 +66,6 @@ export function eventLabel(type: MatchEventType): string {
 
 export function eventName(type: MatchEventType): string {
   return EVENT_NAMES[type] ?? type
-}
-
-/**
- * How an infraction reads on a scoresheet cell.
- *
- * Written out rather than abbreviated, because an infraction is the one call
- * that does not sit with the wrestler who caused it. "S1" in a wrestler's cell
- * invites the reading that they stalled; "Stall 1" reads as what it is — a
- * point they were given because the other wrestler did.
- *
- * The number is the points it was worth, so a two-point stall is "Stall 2".
- * Calls worth nothing carry no number.
- */
-const CALL_WORDS: Partial<Record<MatchEventType, string>> = {
-  stallWarning: 'Stall',
-  stallPoint: 'Stall',
-  stallPoint2: 'Stall',
-  stallDq: 'Stall',
-  caution: 'Caution',
-  cautionPoint: 'Caution',
-  penalty1: 'Penalty',
-  penalty2: 'Penalty',
-}
-
-export function infractionMark(type: MatchEventType, points: number): string {
-  const word = CALL_WORDS[type] ?? eventLabel(type)
-  return points > 0 ? `${word} ${points}` : word
 }
 
 /**
