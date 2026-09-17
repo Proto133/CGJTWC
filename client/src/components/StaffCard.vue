@@ -3,10 +3,13 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { StaffMember } from 'src/types'
 
 /**
- * One coach, with the bio clamped to keep the grid even.
+ * One coach: name, role, the first line of their bio, and contact.
+ *
+ * The card is a directory entry rather than the bio itself, which is why the
+ * bio is clamped to a line and the rest lives in the dialog.
  *
  * The card only becomes clickable when the clamp is actually hiding something.
- * A card whose bio fits has nothing more to show, and offering a modal that
+ * A one-line bio has nothing more to show, and offering a modal that
  * reproduces what is already on screen teaches people that clicking these does
  * nothing worth doing.
  */
@@ -133,13 +136,25 @@ onBeforeUnmount(() => {
   line-height: 1.6;
   /* Bios are free text, so guard against unbroken strings widening the card. */
   overflow-wrap: anywhere;
-  white-space: pre-wrap;
 
-  /* Four lines keeps a row of cards even without cutting most bios short. */
+  /*
+   * Line breaks collapse to spaces here, unlike in the dialog. The bios are
+   * pasted in, and one that opens with a blank line or a short heading would
+   * spend the single line on nothing and leave the card looking broken while
+   * still being clickable. The dialog keeps the author's paragraphs.
+   */
+  white-space: normal;
+
+  /*
+   * One line. The card is a directory entry — name, role, a glimpse of the
+   * bio, contact — and the bio itself lives in the dialog. At one line nearly
+   * every card becomes clickable, which is the point: the grid stays uniform
+   * and the affordance is consistent across the page.
+   */
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
-  line-clamp: 4;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
   overflow: hidden;
 }
 
