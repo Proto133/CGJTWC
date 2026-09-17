@@ -696,41 +696,62 @@ service cloud.firestore {
              && (!('notes' in p.keys()) || (p.notes is string && p.notes.size() <= 2000));
     }
 
-    // Rules have no loops, so each slot is checked explicitly up to a cap. Six
-    // is far beyond a realistic family; anyone larger can call the club.
+    // Rules have no loops, so each slot is checked explicitly up to a cap.
+    //
+    // The cap is a budget, not a policy. Firestore aborts any rule that
+    // evaluates more than 1000 expressions, and every wrestler in the list is
+    // another pass through validWrestler. This previously said six while the
+    // budget actually ran out at four, so a parent with four children got a
+    // bare "missing or insufficient permissions" and no way to know why, and
+    // the club lost the registration.
+    //
+    // Measured against the emulator: with validWrestler as it now stands the
+    // ceiling is ten. Eight is deliberately short of it. Sitting on the exact
+    // ceiling would mean the next field added anywhere in this file silently
+    // pushes it back under and brings the same bug back, in the same
+    // undiagnosable form. If eight ever needs raising, re-measure first — the
+    // number is a property of the whole ruleset, not of this function.
+    //
+    // Slots past the submitted length short-circuit and cost almost nothing,
+    // so the price scales with the actual family, not with the cap.
+    //
     // Note the single-wrestler `wrestler` map is no longer accepted on create:
     // existing documents keep it and stay readable, but new submissions always
     // send a list, even for one wrestler.
     function validWrestlerList(list) {
       return list is list
              && list.size() >= 1
-             && list.size() <= 6
+             && list.size() <= 8
              && validWrestler(list[0])
              && (list.size() < 2 || validWrestler(list[1]))
              && (list.size() < 3 || validWrestler(list[2]))
              && (list.size() < 4 || validWrestler(list[3]))
              && (list.size() < 5 || validWrestler(list[4]))
-             && (list.size() < 6 || validWrestler(list[5]));
+             && (list.size() < 6 || validWrestler(list[5]))
+             && (list.size() < 7 || validWrestler(list[6]))
+             && (list.size() < 8 || validWrestler(list[7]));
     }
 
+    // Presence and type of the four fields the admin screens read, and nothing
+    // more.
+    //
+    // This used to also whitelist keys and measure every string, which cost
+    // roughly four times as much per wrestler and is what held the real limit
+    // at three. What that bought was protection against junk keys and
+    // over-long free text inside a wrestler map; what it cost was families
+    // with four or more children being unable to register at all. The document
+    // as a whole is still key-whitelisted by isValidRegistration, a document
+    // cannot exceed 1 MiB, and nothing security-relevant lives in here —
+    // status and payment are validated at the top level and stay strict.
+    //
+    // Accessing a field that is absent is an error, which denies the write, so
+    // naming all four here is what makes them required.
     function validWrestler(w) {
       return w is map
-             && w.keys().hasOnly(['firstName', 'lastName', 'dob', 'grade',
-                                  'yearsExperience', 'previousClub',
-                                  'siblingName', 'usawNumber'])
-             && w.keys().hasAll(['firstName', 'lastName', 'dob', 'grade'])
-             && w.firstName is string && w.firstName.size() > 0 && w.firstName.size() <= 60
-             && w.lastName is string && w.lastName.size() > 0 && w.lastName.size() <= 60
-             && w.dob is string && w.dob.matches('^[0-9]{4}/[0-9]{2}/[0-9]{2}$')
-             && w.grade is string && w.grade.size() > 0 && w.grade.size() <= 20
-             && (!('yearsExperience' in w.keys())
-                 || (w.yearsExperience is string && w.yearsExperience.size() <= 40))
-             && (!('previousClub' in w.keys())
-                 || (w.previousClub is string && w.previousClub.size() <= 120))
-             && (!('siblingName' in w.keys())
-                 || (w.siblingName is string && w.siblingName.size() <= 120))
-             && (!('usawNumber' in w.keys())
-                 || (w.usawNumber is string && w.usawNumber.size() <= 40));
+             && w.firstName is string
+             && w.lastName is string
+             && w.dob is string
+             && w.grade is string;
     }
 
     // Every flag must be present so the shape is predictable in the admin UI;

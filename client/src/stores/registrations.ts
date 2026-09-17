@@ -13,7 +13,7 @@ import {
 } from 'firebase/firestore'
 import { db, auth } from 'src/firebase'
 import { Notify } from 'quasar'
-import { errorMessage } from 'src/utils/errors'
+import { errorCode, errorMessage } from 'src/utils/errors'
 import type {
   Registration,
   RegistrationFormPayload,
@@ -96,10 +96,19 @@ export const useRegistrationsStore = defineStore('registrations', () => {
       })
       return true
     } catch (error: unknown) {
+      // Deliberately not the SDK's own wording. This form is public, and a
+      // parent who has just filled in four children reads "Missing or
+      // insufficient permissions" as being shut out rather than as a fault
+      // worth reporting, so the club never hears about it. The real text still
+      // goes to the console for whoever is diagnosing it.
+      console.error('Registration submit failed:', error)
       Notify.create({
         type: 'negative',
-        message: errorMessage(error, 'Could not submit the registration. Please try again.'),
-        timeout: 6000,
+        message: errorCode(error) === 'permission-denied'
+          ? 'Something on our end rejected this registration. Please contact us and '
+            + 'we will get you signed up directly.'
+          : errorMessage(error, 'Could not submit the registration. Please try again.'),
+        timeout: 8000,
       })
       return false
     } finally {

@@ -104,7 +104,16 @@ const amountDue = computed(() =>
 const additionalRateMissing = computed(() =>
   extraWrestlers.value > 0 && !(additionalTier.value?.amount))
 
+/**
+ * Must not exceed the cap in firestore.rules, which is itself held below what
+ * the rules engine can evaluate rather than chosen. A form that accepts more
+ * wrestlers than the rules will take produces a bare permission error after
+ * the parent has filled the whole thing in, which is how this last went wrong.
+ */
+const MAX_WRESTLERS = 8
+
 function addWrestler() {
+  if (form.value.wrestlers.length >= MAX_WRESTLERS) return
   form.value.wrestlers.push(emptyWrestler())
 }
 
@@ -383,10 +392,10 @@ async function copyReference() {
             icon="person_add"
             label="Add a Wrestler"
             class="q-mt-sm"
-            :disable="form.wrestlers.length >= 6"
+            :disable="form.wrestlers.length >= MAX_WRESTLERS"
             @click="addWrestler"
           />
-          <div v-if="form.wrestlers.length >= 6" class="section-note q-mt-xs">
+          <div v-if="form.wrestlers.length >= MAX_WRESTLERS" class="section-note q-mt-xs">
             That is the most this form takes at once — please contact us for a
             larger family and we will sort it out directly.
           </div>
