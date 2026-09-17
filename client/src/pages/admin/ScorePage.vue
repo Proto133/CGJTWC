@@ -578,6 +578,16 @@ useMeta({ title: 'Score a bout' })
   <div class="score-shell">
     <!-- PICK -->
     <section v-if="stage === 'pick'" class="score-pick">
+      <q-btn
+        flat
+        dense
+        no-caps
+        color="white"
+        icon="arrow_back"
+        label="Dashboard"
+        class="score-leave"
+        to="/admin"
+      />
       <h1 class="score-title">Score a bout</h1>
 
       <q-select
@@ -855,6 +865,24 @@ useMeta({ title: 'Score a bout' })
             @click="record(call, 'opponent')"
           >{{ eventLabel(call) }}</button>
         </div>
+      </div>
+
+      <!-- Below the scoring grid, where nothing is tapped in a hurry. Leaving
+           mid-bout is safe — the draft is written after every call, so coming
+           back resumes exactly here — and that is said out loud, because
+           otherwise nobody would risk finding out. -->
+      <div class="score-leave-row">
+        <q-btn
+          flat
+          dense
+          no-caps
+          size="sm"
+          color="white"
+          icon="arrow_back"
+          label="Leave"
+          to="/admin"
+        />
+        <span class="score-leave-row__note">The bout is kept if you do</span>
       </div>
 
       <BoxScoreDialog
@@ -1476,6 +1504,25 @@ useMeta({ title: 'Score a bout' })
   margin: -8px 0 12px;
   font-size: 0.9rem;
   color: var(--band-red-ink);
+}
+
+/* Set off from the title so it reads as a way out rather than a heading. */
+.score-leave {
+  margin: 0 0 6px -6px;
+  opacity: 0.75;
+}
+
+.score-leave-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  opacity: 0.6;
+}
+
+.score-leave-row__note {
+  font-size: 0.74rem;
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .score-hint {
