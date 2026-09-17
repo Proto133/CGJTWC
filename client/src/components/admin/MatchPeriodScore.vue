@@ -4,6 +4,7 @@ import { periodBreakdown, scoreFromEvents } from 'src/utils/matchScoring'
 import type { ScoreMark } from 'src/utils/matchScoring'
 import {
   awardMark,
+  endingMark,
   eventLabel,
   eventName,
   periodLabel,
@@ -28,8 +29,8 @@ const props = defineProps<{
   winType: MatchWinType
   officialFor?: number | undefined
   officialAgainst?: number | undefined
-  fallPeriod?: number | undefined
-  fallTime?: string | undefined
+  endPeriod?: number | undefined
+  endTime?: string | undefined
 }>()
 
 const columns = computed(() => periodBreakdown(props.events))
@@ -81,27 +82,31 @@ const key = computed(() => {
 const winner = computed(() => (props.result === 'win' ? props.ourName : props.theirName))
 
 /**
- * Where the fall goes.
+ * Where the ending goes.
  *
- * A fall is not a call in the log — it is how the bout stopped — so it is not
- * in the breakdown and gets placed here instead. It belongs in the period it
- * happened in, on the line of the wrestler who got it, which is how a sheet
- * records it: F and the time left.
+ * A fall, technical fall, default or disqualification is not a call in the log
+ * — it is how the bout stopped — so it is not in the breakdown and gets placed
+ * here instead. It belongs in the period it happened in, on the line of the
+ * wrestler it went to, which is how a sheet records it: the mark and the time
+ * left.
  *
  * Only shown when the period is known. Bouts recorded before that was asked
- * for have the result but nowhere to put it, and a fall parked in the wrong
- * period would be worse than the line underneath simply saying "won by pin".
+ * for have the result but nowhere to put it, and an ending parked in a guessed
+ * period would be worse than the line underneath simply saying how it was won.
  */
-const fallSide = computed<'wrestler' | 'opponent' | null>(() => {
-  if (props.winType !== 'fall' || !props.fallPeriod) return null
+const endMark = computed(() => endingMark(props.winType))
+
+const endSide = computed<'wrestler' | 'opponent' | null>(() => {
+  if (!endMark.value || !props.endPeriod) return null
   return props.result === 'win' ? 'wrestler' : 'opponent'
 })
 
-function showsFall(period: number, side: 'wrestler' | 'opponent'): boolean {
-  return fallSide.value === side && props.fallPeriod === period
+function showsEnding(period: number, side: 'wrestler' | 'opponent'): boolean {
+  return endSide.value === side && props.endPeriod === period
 }
 
-const fallMark = computed(() => (props.fallTime ? `F ${props.fallTime}` : 'F'))
+const endLabel = computed(() =>
+  (props.endTime ? `${endMark.value} ${props.endTime}` : endMark.value))
 
 const resultLine = computed(() => {
   if (props.winType === 'bye') return 'Bye — not wrestled.'
@@ -149,12 +154,12 @@ const officialDiffers = computed(() => {
                 :title="markTitle(mark)"
               >{{ markLabel(mark) }}</span>
               <span
-                v-if="showsFall(column.period, 'wrestler')"
-                class="call call--fall"
-                :title="`Fall with ${fallTime} left in ${periodName(column.period)}`"
-              >{{ fallMark }}</span>
+                v-if="showsEnding(column.period, 'wrestler')"
+                class="call call--ending"
+                :title="`${winTypeLabel(winType)} with ${endTime} left in ${periodName(column.period)}`"
+              >{{ endLabel }}</span>
               <span
-                v-if="column.wrestler.length === 0 && !showsFall(column.period, 'wrestler')"
+                v-if="column.wrestler.length === 0 && !showsEnding(column.period, 'wrestler')"
                 class="call__none"
               >—</span>
             </td>
@@ -171,12 +176,12 @@ const officialDiffers = computed(() => {
                 :title="markTitle(mark)"
               >{{ markLabel(mark) }}</span>
               <span
-                v-if="showsFall(column.period, 'opponent')"
-                class="call call--fall"
-                :title="`Fall with ${fallTime} left in ${periodName(column.period)}`"
-              >{{ fallMark }}</span>
+                v-if="showsEnding(column.period, 'opponent')"
+                class="call call--ending"
+                :title="`${winTypeLabel(winType)} with ${endTime} left in ${periodName(column.period)}`"
+              >{{ endLabel }}</span>
               <span
-                v-if="column.opponent.length === 0 && !showsFall(column.period, 'opponent')"
+                v-if="column.opponent.length === 0 && !showsEnding(column.period, 'opponent')"
                 class="call__none"
               >—</span>
             </td>
@@ -282,7 +287,7 @@ const officialDiffers = computed(() => {
 
 /* Neither a call nor a point, but the moment the bout stopped, so it is
    neither filled navy nor outlined grey. */
-.call--fall {
+.call--ending {
   background: var(--gold-500, #d4a017);
   color: var(--navy-800, #10233f);
   white-space: nowrap;

@@ -317,6 +317,35 @@ const UNWRESTLED: ReadonlySet<MatchWinType> = new Set<MatchWinType>([
   'bye',
 ])
 
+/**
+ * Endings that stopped the clock before it ran out, so the sheet records when.
+ *
+ * A decision and a major decision are excluded because they are what happens
+ * when nothing stops the bout — the clock reached zero, which is not a fact
+ * worth asking anyone to type. A forfeit and a bye are excluded for the
+ * opposite reason: there was no clock, because there was no bout.
+ *
+ * A technical fall can genuinely land on 0:00, so nothing here may treat an
+ * all-zero time as missing.
+ */
+const STOPPED_EARLY: ReadonlySet<MatchWinType> = new Set<MatchWinType>([
+  'fall',
+  'techFall',
+  'injuryDefault',
+  'disqualification',
+])
+
+export function needsEndTime(winType: MatchWinType): boolean {
+  return STOPPED_EARLY.has(winType)
+}
+
+/** The scoresheet's own format for a time left on the clock. */
+export const END_TIME_PATTERN = /^[0-9]:[0-5][0-9]$/
+
+export function isValidEndTime(value: string): boolean {
+  return END_TIME_PATTERN.test(value)
+}
+
 // ---------------------------------------------------------------------------
 // Derivation
 // ---------------------------------------------------------------------------

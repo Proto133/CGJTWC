@@ -817,15 +817,19 @@ export interface Match {
   officialAgainst?: number
 
   /**
-   * When a fall happened: the period, and the time left on the clock in it.
+   * When the bout stopped, for the endings that stop it early: the period, and
+   * the time left on the clock in it.
    *
    * A scoresheet records this, and it is not decoration — "pinned with 0:12
    * left in the third" and "pinned with 1:40 left in the first" read as very
    * different results a season later.
+   *
+   * Absent on a decision, which by definition ran out the clock, and on a
+   * forfeit or bye, where nobody wrestled and there was no clock to read.
    */
-  fallPeriod?: number
-  /** 'M:SS' remaining in that period. */
-  fallTime?: string
+  endPeriod?: number
+  /** 'M:SS' remaining in that period. A technical fall can legitimately be 0:00. */
+  endTime?: string
 
   /** Present when scored live. Takes precedence over `counts`. */
   events?: MatchEvent[]

@@ -14,6 +14,8 @@ import {
   cautionCount,
   isChoice,
   isInfraction,
+  isValidEndTime,
+  needsEndTime,
   nextCautionCall,
   nextStallCall,
   scoreFromEvents,
@@ -29,6 +31,7 @@ import {
   eventName,
   periodLabel,
   periodName,
+  winTypeLabel,
 } from 'src/utils/matchLabels'
 import BoxScoreDialog from 'components/admin/BoxScoreDialog.vue'
 import PeriodChoiceDialog from 'components/admin/PeriodChoiceDialog.vue'
@@ -87,9 +90,14 @@ const officialFor = ref<number | null>(null)
 const officialAgainst = ref<number | null>(null)
 /** Why the bout ended, when it ended itself rather than being ended by hand. */
 const finishNote = ref('')
-/** Only meaningful for a fall. 'M:SS' left on the clock, and which period. */
-const fallPeriod = ref<number | null>(null)
-const fallTime = ref('')
+/**
+ * When the bout stopped, for the endings that stop it early.
+ *
+ * 'M:SS' left on the clock, and which period. Required before saving any of
+ * those endings, because nobody reconstructs it later from a bracket.
+ */
+const endPeriod = ref<number | null>(null)
+const endTime = ref('')
 
 onMounted(() => {
   wrestlersStore.subscribe()
@@ -223,6 +231,10 @@ function checkTechFall() {
   officialAgainst.value = theirs
   result.value = ours > theirs ? 'win' : 'loss'
   winType.value = 'techFall'
+  // The period is known; the clock is not, and a technical fall can land on
+  // 0:00, so it cannot be inferred from anything and has to be read off.
+  endPeriod.value = period.value
+  endTime.value = ''
   finishNote.value = `${margin}-point lead \u2014 technical fall.`
   stage.value = 'finish'
 }
@@ -363,6 +375,8 @@ function endByStalling(offender: 'wrestler' | 'opponent') {
   officialAgainst.value = derived.against
   result.value = offender === 'wrestler' ? 'loss' : 'win'
   winType.value = 'disqualification'
+  endPeriod.value = period.value
+  endTime.value = ''
   finishNote.value = offender === 'wrestler'
     ? `Fifth stalling call on ${wrestlerName.value || 'our wrestler'} \u2014 disqualified.`
     : 'Fifth stalling call on the opponent \u2014 disqualified.'
@@ -415,7 +429,7 @@ const CHOICE_PERIODS = [2, 3, TIEBREAKER_PERIOD]
 const choiceOpen = ref(false)
 const choiceFor = ref(2)
 
-function endPeriod() {
+function advancePeriod() {
   const next = period.value + 1
 
   if (CHOICE_PERIODS.includes(next)) {
@@ -461,8 +475,8 @@ function recordFall(side: 'wrestler' | 'opponent', clock: string) {
   officialAgainst.value = derived.against
   result.value = side === 'wrestler' ? 'win' : 'loss'
   winType.value = 'fall'
-  fallPeriod.value = period.value
-  fallTime.value = clock
+  endPeriod.value = period.value
+  endTime.value = clock
   finishNote.value = `Fall with ${clock} left in ${periodShort.value}.`
   stage.value = 'finish'
 }
@@ -482,7 +496,24 @@ function endMatch() {
 const tallyDisagrees = computed(() =>
   officialFor.value !== score.value.for || officialAgainst.value !== score.value.against)
 
-const fallTimeValid = computed(() => /^[0-9]:[0-5][0-9]$/.test(fallTime.value))
+const timingRequired = computed(() => needsEndTime(winType.value))
+const endTimeValid = computed(() => isValidEndTime(endTime.value))
+
+/**
+ * Blocks the save rather than warning about it.
+ *
+ * This is the one moment the clock is still readable. A bout saved without it
+ * cannot be repaired from a bracket later, which is exactly the sort of gap
+ * that gets noticed at the end of a season and never filled.
+ */
+const canSave = computed(() =>
+  !timingRequired.value || (endPeriod.value !== null && endTimeValid.value))
+
+// Filled in when the ending changes to one that wants it, so the common case
+// is already right and only the clock has to be typed.
+watch(timingRequired, (needed) => {
+  if (needed && endPeriod.value === null) endPeriod.value = period.value
+})
 
 async function save() {
   if (!wrestlerId.value) return
@@ -508,12 +539,11 @@ async function save() {
     ...(round.value ? { round: round.value.trim() } : {}),
     ...(officialFor.value !== null ? { officialFor: officialFor.value } : {}),
     ...(officialAgainst.value !== null ? { officialAgainst: officialAgainst.value } : {}),
-    // Only carried on a fall. Left on any other ending they would be a time
-    // that refers to nothing.
-    ...(winType.value === 'fall' && fallPeriod.value !== null
-      ? { fallPeriod: fallPeriod.value } : {}),
-    ...(winType.value === 'fall' && /^[0-9]:[0-5][0-9]$/.test(fallTime.value)
-      ? { fallTime: fallTime.value } : {}),
+    // Only carried on an ending that stopped the clock. On a decision they
+    // would be a time that refers to nothing.
+    ...(timingRequired.value && endPeriod.value !== null
+      ? { endPeriod: endPeriod.value } : {}),
+    ...(timingRequired.value && endTimeValid.value ? { endTime: endTime.value } : {}),
   })
 
   if (id) reset()
@@ -533,8 +563,8 @@ function reset() {
   officialFor.value = null
   officialAgainst.value = null
   finishNote.value = ''
-  fallPeriod.value = null
-  fallTime.value = ''
+  endPeriod.value = null
+  endTime.value = ''
 }
 
 function discard() {
@@ -679,7 +709,7 @@ useMeta({ title: 'Score a bout' })
             type="button"
             class="centre__btn"
             :aria-label="endPeriodLabel"
-            @click="endPeriod"
+            @click="advancePeriod"
           >{{ endPeriodShort }}</button>
           <button
             type="button"
@@ -919,30 +949,35 @@ useMeta({ title: 'Score a bout' })
         class="q-mt-md"
       />
 
-      <!-- Asked however the fall got here: the button fills these in, picking
-           'Fall' by hand does not, and either way the sheet wants them. -->
-      <div v-if="winType === 'fall'" class="row q-col-gutter-sm q-mt-sm">
+      <!-- Every ending that stopped the clock wants this, not just a fall.
+           Required, because right now is the only moment anyone can still read
+           the clock. -->
+      <div v-if="timingRequired" class="row q-col-gutter-sm q-mt-sm">
         <div class="col-6">
           <q-input
-            v-model.number="fallPeriod"
+            v-model.number="endPeriod"
             type="number"
             min="1"
-            label="Period of the fall"
+            label="Period it ended in *"
             outlined
             dark
           />
         </div>
         <div class="col-6">
           <q-input
-            v-model="fallTime"
-            label="Time left"
+            v-model="endTime"
+            label="Time left *"
             mask="#:##"
             placeholder="1:38"
             outlined
             dark
-            :error="fallTime.length > 0 && !fallTimeValid"
+            :error="endTime.length > 0 && !endTimeValid"
             error-message="Enter it as M:SS"
           />
+        </div>
+        <div class="col-12 score-hint">
+          A {{ winTypeLabel(winType).toLowerCase() }} stopped the bout, so the
+          sheet records when. 0:00 is a real answer for a technical fall.
         </div>
       </div>
 
@@ -955,6 +990,7 @@ useMeta({ title: 'Score a bout' })
           no-caps
           color="primary"
           label="Save bout"
+          :disable="!canSave"
           :loading="matchesStore.saving"
           @click="save"
         />
@@ -1439,5 +1475,11 @@ useMeta({ title: 'Score a bout' })
   margin: -8px 0 12px;
   font-size: 0.9rem;
   color: var(--band-red-ink);
+}
+
+.score-hint {
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.5);
 }
 </style>

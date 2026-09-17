@@ -137,6 +137,23 @@ export function winTypeLabel(winType: MatchWinType): string {
 }
 
 /**
+ * How the ending is marked on the sheet, in the period it happened.
+ *
+ * Straight from the legend: F, TF, Def, DQ. Only the endings that stop the
+ * clock have one — a decision has nothing to mark because nothing stopped.
+ */
+const ENDING_MARKS: Partial<Record<MatchWinType, string>> = {
+  fall: 'F',
+  techFall: 'TF',
+  injuryDefault: 'Def',
+  disqualification: 'DQ',
+}
+
+export function endingMark(winType: MatchWinType): string {
+  return ENDING_MARKS[winType] ?? ''
+}
+
+/**
  * Full names for a select, kept apart from the labels above.
  *
  * A bout list needs "Pin" to fit on one line next to a score; a dropdown asking

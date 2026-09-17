@@ -549,7 +549,7 @@ service cloud.firestore {
       return d.keys().hasOnly(['wrestlerId', 'season', 'eventId', 'eventName', 'date',
                                'opponentName', 'opponentTeam', 'weightClass', 'round',
                                'result', 'winType', 'officialFor', 'officialAgainst',
-                               'fallPeriod', 'fallTime',
+                               'endPeriod', 'endTime',
                                'events', 'counts', 'createdAt', 'updatedAt', 'createdByUid'])
              && d.keys().hasAll(['wrestlerId', 'season', 'date', 'result', 'winType'])
              && d.wrestlerId is string && d.wrestlerId.size() > 0
@@ -570,10 +570,10 @@ service cloud.firestore {
                  || (d.opponentTeam is string && d.opponentTeam.size() <= 120))
              && (!('round' in d.keys()) || (d.round is string && d.round.size() <= 60))
              // Overtime keeps counting up from three, so the ceiling is loose.
-             && (!('fallPeriod' in d.keys())
-                 || (d.fallPeriod is int && d.fallPeriod >= 1 && d.fallPeriod <= 12))
-             && (!('fallTime' in d.keys())
-                 || (d.fallTime is string && d.fallTime.matches('^[0-9]:[0-5][0-9]$')));
+             && (!('endPeriod' in d.keys())
+                 || (d.endPeriod is int && d.endPeriod >= 1 && d.endPeriod <= 12))
+             && (!('endTime' in d.keys())
+                 || (d.endTime is string && d.endTime.matches('^[0-9]:[0-5][0-9]$')));
     }
 
     // Generous upper bound rather than a real limit: a tech fall ends at 15, but
