@@ -1,11 +1,21 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useStaffStore } from 'stores/staff'
+import StaffCard from 'components/StaffCard.vue'
+import type { StaffMember } from 'src/types'
 
 const staffStore = useStaffStore()
 
 onMounted(() => staffStore.subscribe())
 onUnmounted(() => staffStore.unsubscribeFromStaff())
+
+const bioOpen = ref(false)
+const selected = ref<StaffMember | null>(null)
+
+function openBio(member: StaffMember) {
+  selected.value = member
+  bioOpen.value = true
+}
 </script>
 
 <template>
@@ -33,32 +43,48 @@ onUnmounted(() => staffStore.unsubscribeFromStaff())
           :key="member.id"
           class="col-12 col-sm-6"
         >
-          <q-card flat bordered class="staff-card card-interactive">
-            <q-card-section>
-              <div class="staff-card__role">{{ member.role }}</div>
-              <h2 class="staff-card__name">
-                {{ member.firstName }} {{ member.lastName }}
-              </h2>
-              <p v-if="member.bio" class="staff-card__bio">{{ member.bio }}</p>
-              <a
-                v-if="member.email"
-                :href="`mailto:${member.email}`"
-                class="staff-card__email"
-              >{{ member.email }}</a>
-            </q-card-section>
-          </q-card>
+          <StaffCard :member="member" @open="openBio(member)" />
         </div>
       </div>
     </div>
+
+    <q-dialog v-model="bioOpen">
+      <q-card v-if="selected" class="bio-card">
+        <q-card-section>
+          <div class="bio-card__role">{{ selected.role }}</div>
+          <h2 class="bio-card__name">
+            {{ selected.firstName }} {{ selected.lastName }}
+          </h2>
+        </q-card-section>
+
+        <q-separator />
+
+        <!-- Scrolls rather than growing past the viewport: a long bio would
+             otherwise push the close button off the bottom of a phone. -->
+        <q-card-section class="bio-card__body">
+          <p class="bio-card__bio">{{ selected.bio }}</p>
+          <a
+            v-if="selected.email"
+            :href="`mailto:${selected.email}`"
+            class="bio-card__email"
+          >{{ selected.email }}</a>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn v-close-popup flat no-caps label="Close" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
 <style scoped>
-.staff-card {
-  height: 100%;
+.bio-card {
+  width: 560px;
+  max-width: 94vw;
 }
 
-.staff-card__role {
+.bio-card__role {
   font-family: var(--font-display);
   font-weight: 600;
   font-size: 0.76rem;
@@ -67,25 +93,30 @@ onUnmounted(() => staffStore.unsubscribeFromStaff())
   color: var(--grey-400);
 }
 
-.staff-card__name {
-  font-size: 1.4rem;
+.bio-card__name {
+  font-size: 1.5rem;
   line-height: 1.15;
   margin: 6px 0 0;
   overflow-wrap: break-word;
 }
 
-.staff-card__bio {
-  margin: 10px 0 0;
+.bio-card__body {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.bio-card__bio {
+  margin: 0;
   color: var(--grey-600);
-  line-height: 1.6;
-  /* Bios are free text, so guard against unbroken strings widening the card. */
+  line-height: 1.7;
   overflow-wrap: anywhere;
+  /* Paragraph breaks the coach typed are kept, as on the card. */
   white-space: pre-wrap;
 }
 
-.staff-card__email {
+.bio-card__email {
   display: inline-block;
-  margin-top: 10px;
+  margin-top: 14px;
   font-size: 0.9rem;
   overflow-wrap: anywhere;
 }
