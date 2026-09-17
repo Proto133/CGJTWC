@@ -36,14 +36,14 @@ function nameOf(side: Side) {
   return side === 'wrestler' ? props.ourName : props.theirName
 }
 
-const pinner = ref<Side | null>(null)
+const winner = ref<Side | null>(null)
 const clock = ref('')
 
 watch(
   () => props.modelValue,
   (open) => {
     if (!open) return
-    pinner.value = null
+    winner.value = null
     clock.value = ''
   },
 )
@@ -52,8 +52,8 @@ watch(
 const valid = computed(() => /^[0-9]:[0-5][0-9]$/.test(clock.value))
 
 function confirm() {
-  if (!pinner.value || !valid.value) return
-  emit('record', pinner.value, clock.value)
+  if (!winner.value || !valid.value) return
+  emit('record', winner.value, clock.value)
   emit('update:modelValue', false)
 }
 </script>
@@ -70,30 +70,34 @@ function confirm() {
       </q-card-section>
 
       <q-card-section>
-        <div class="fall__ask">Who pinned?</div>
+        <!-- "Winner", not "who pinned" — which reads just as easily as "who
+             got pinned" and is being answered in a hurry. -->
+        <div class="fall__ask">Winner?</div>
         <div class="fall__row">
           <button
             v-for="side in (['wrestler', 'opponent'] as Side[])"
             :key="side"
             type="button"
             class="fall-btn"
-            :class="[`fall-btn--${bandOf(side)}`, { 'fall-btn--on': pinner === side }]"
-            @click="pinner = side"
+            :class="[`fall-btn--${bandOf(side)}`, { 'fall-btn--on': winner === side }]"
+            @click="winner = side"
           >
             <span class="fall-btn__band">{{ bandOf(side) }}</span>
             <span class="fall-btn__name">{{ nameOf(side) }}</span>
           </button>
         </div>
 
-        <!-- Time left, not time elapsed: it is what the clock on the wall says
-             at the moment the referee's hand comes down, so it is the only
-             number the scorer can actually read off. -->
+        <!-- Time into the period, not time left. Remaining is easier to read
+             off a countdown clock, but it only means something alongside the
+             period length, and that changes with the division — so the sheet
+             would need an assumption to be read correctly years later. -->
         <q-input
           v-model="clock"
           class="q-mt-md"
-          label="Time left in the period *"
+          label="Time into the period *"
           mask="#:##"
-          placeholder="1:38"
+          placeholder="0:09"
+          hint="How far into the period it happened"
           outlined
           dark
           :error="clock.length > 0 && !valid"
@@ -108,7 +112,7 @@ function confirm() {
           no-caps
           color="primary"
           label="End by fall"
-          :disable="!pinner || !valid"
+          :disable="!winner || !valid"
           @click="confirm"
         />
       </q-card-actions>

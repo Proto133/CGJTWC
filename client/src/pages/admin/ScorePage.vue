@@ -477,7 +477,7 @@ function recordFall(side: 'wrestler' | 'opponent', clock: string) {
   winType.value = 'fall'
   endPeriod.value = period.value
   endTime.value = clock
-  finishNote.value = `Fall with ${clock} left in ${periodShort.value}.`
+  finishNote.value = `Fall at ${clock} of ${periodShort.value}.`
   stage.value = 'finish'
 }
 
@@ -950,8 +950,7 @@ useMeta({ title: 'Score a bout' })
       />
 
       <!-- Every ending that stopped the clock wants this, not just a fall.
-           Required, because right now is the only moment anyone can still read
-           the clock. -->
+           Required, because right now is the only moment anyone still knows. -->
       <div v-if="timingRequired" class="row q-col-gutter-sm q-mt-sm">
         <div class="col-6">
           <q-input
@@ -966,9 +965,9 @@ useMeta({ title: 'Score a bout' })
         <div class="col-6">
           <q-input
             v-model="endTime"
-            label="Time left *"
+            label="Time into the period *"
             mask="#:##"
-            placeholder="1:38"
+            placeholder="0:09"
             outlined
             dark
             :error="endTime.length > 0 && !endTimeValid"
@@ -977,7 +976,9 @@ useMeta({ title: 'Score a bout' })
         </div>
         <div class="col-12 score-hint">
           A {{ winTypeLabel(winType).toLowerCase() }} stopped the bout, so the
-          sheet records when. 0:00 is a real answer for a technical fall.
+          sheet records how far into the period it happened — not what was left
+          on the clock, which would need the period length to make sense of.
+          0:00 is a real answer for a technical fall.
         </div>
       </div>
 

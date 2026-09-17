@@ -818,17 +818,26 @@ export interface Match {
 
   /**
    * When the bout stopped, for the endings that stop it early: the period, and
-   * the time left on the clock in it.
+   * how far into it the bout ended.
    *
-   * A scoresheet records this, and it is not decoration — "pinned with 0:12
-   * left in the third" and "pinned with 1:40 left in the first" read as very
-   * different results a season later.
+   * A scoresheet records this, and it is not decoration — "pinned at 0:09 of
+   * the first" and "pinned at 1:40 of the third" read as very different
+   * results a season later.
    *
    * Absent on a decision, which by definition ran out the clock, and on a
    * forfeit or bye, where nobody wrestled and there was no clock to read.
    */
   endPeriod?: number
-  /** 'M:SS' remaining in that period. A technical fall can legitimately be 0:00. */
+  /**
+   * 'M:SS' into that period, not left on the clock.
+   *
+   * Elapsed rather than remaining because remaining only means something if
+   * you also know how long the period was, and that varies by division. A
+   * stored figure that needs an assumption to read is a figure that will one
+   * day be read with the wrong one.
+   *
+   * 0:00 is legitimate: a technical fall can land exactly on the buzzer.
+   */
   endTime?: string
 
   /** Present when scored live. Takes precedence over `counts`. */

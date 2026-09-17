@@ -87,8 +87,8 @@ const winner = computed(() => (props.result === 'win' ? props.ourName : props.th
  * A fall, technical fall, default or disqualification is not a call in the log
  * — it is how the bout stopped — so it is not in the breakdown and gets placed
  * here instead. It belongs in the period it happened in, on the line of the
- * wrestler it went to, which is how a sheet records it: the mark and the time
- * left.
+ * wrestler it went to, which is how a sheet records it: the mark and how far
+ * into the period it fell.
  *
  * Only shown when the period is known. Bouts recorded before that was asked
  * for have the result but nowhere to put it, and an ending parked in a guessed
@@ -156,7 +156,7 @@ const officialDiffers = computed(() => {
               <span
                 v-if="showsEnding(column.period, 'wrestler')"
                 class="call call--ending"
-                :title="`${winTypeLabel(winType)} with ${endTime} left in ${periodName(column.period)}`"
+                :title="`${winTypeLabel(winType)} at ${endTime} of ${periodName(column.period)}`"
               >{{ endLabel }}</span>
               <span
                 v-if="column.wrestler.length === 0 && !showsEnding(column.period, 'wrestler')"
@@ -178,7 +178,7 @@ const officialDiffers = computed(() => {
               <span
                 v-if="showsEnding(column.period, 'opponent')"
                 class="call call--ending"
-                :title="`${winTypeLabel(winType)} with ${endTime} left in ${periodName(column.period)}`"
+                :title="`${winTypeLabel(winType)} at ${endTime} of ${periodName(column.period)}`"
               >{{ endLabel }}</span>
               <span
                 v-if="column.opponent.length === 0 && !showsEnding(column.period, 'opponent')"
